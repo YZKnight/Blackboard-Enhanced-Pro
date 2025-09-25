@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Blackboard 增强 Pro | Blackboard Enhanced Pro
 // @namespace    npm/vite-plugin-monkey
-// @version      1.0.2
+// @version      1.0.3
 // @author       Miang
 // @description  Blackboard 增强插件，For SCUPIANS
 // @license      MIT
@@ -631,23 +631,99 @@
       this.memoRoot = null;
       this.gradeProps = gradeProps;
       this.hiddenEls = [];
+      this.isLoading = false;
+      this.isLoaded = false;
+      this.nextTryAt = 0;
       this.checkDOMReady();
     }
     checkDOMReady() {
       this.timer = setInterval(() => {
         try {
+          if (this.isLoaded) {
+            if (this.timer) {
+              clearInterval(this.timer);
+              this.timer = null;
+            }
+            return;
+          }
           const btn = document.querySelector("#downloadPanelButton");
           const previewer = document.querySelector("#previewer");
           const inner = document.querySelector("#previewerInner");
-          if (btn && previewer && inner && !this.inited) {
-            this.inited = true;
-            clearInterval(this.timer);
-            this.timer = null;
-            this.replaceWithIframe(btn.getAttribute("href"), inner);
+          if (btn && previewer && inner) {
+            if (!this.isLoading && Date.now() >= this.nextTryAt) {
+              this.handleDownloadButton(btn, inner);
+            }
           }
         } catch (e) {
         }
       }, 500);
+    }
+    async handleDownloadButton(btn, container) {
+      try {
+        if (this.isLoaded || this.isLoading)
+          return;
+        this.isLoading = true;
+        const href = this._getHref(btn);
+        const nameGuess = this._guessFileName(btn, href);
+        const looksPdfByName = nameGuess ? nameGuess.toLowerCase().endsWith(".pdf") : false;
+        let isPdf = looksPdfByName;
+        if (!isPdf) {
+          try {
+            const res = await fetch(href, { method: "HEAD", credentials: "include" });
+            const ct = (res.headers.get("content-type") || "").toLowerCase();
+            if (ct.includes("application/pdf"))
+              isPdf = true;
+          } catch (_) {
+          }
+        }
+        if (isPdf) {
+          await this.replaceWithIframe(href, container);
+        } else {
+          this.isLoading = false;
+          this.nextTryAt = Date.now() + 3e3;
+        }
+      } catch (_) {
+      }
+    }
+    _getHref(btn) {
+      var _a;
+      let href = btn && btn.getAttribute("href");
+      if (!href || href.startsWith("javascript")) {
+        const dataHref = btn && (btn.getAttribute("data-href") || ((_a = btn.dataset) == null ? void 0 : _a.href));
+        if (dataHref)
+          href = dataHref;
+      }
+      return href;
+    }
+    _guessFileName(btn, href) {
+      try {
+        const dl = btn.getAttribute("download");
+        if (dl)
+          return dl;
+        if (href) {
+          try {
+            const u = new URL(href, window.location.href);
+            const qs = u.searchParams;
+            const cand = qs.get("filename") || qs.get("fileName") || qs.get("name");
+            if (cand)
+              return decodeURIComponent(cand);
+            const path = decodeURIComponent(u.pathname || "");
+            const seg = path.split("/").filter(Boolean).pop();
+            if (seg && /\.[a-z0-9]{2,5}$/i.test(seg))
+              return seg;
+          } catch (_) {
+          }
+        }
+        const panel = document.getElementById("downloadPanel") || document.getElementById("previewer");
+        if (panel) {
+          const text = panel.textContent || "";
+          const m2 = text.match(/\b[^\s]+\.(pdf|docx?|pptx?|xlsx?)\b/i);
+          if (m2)
+            return m2[0];
+        }
+      } catch (_) {
+      }
+      return null;
     }
     async replaceWithIframe(href, container) {
       try {
@@ -663,6 +739,8 @@
             extra.textContent = "无法在线预览，请重新刷新页面。若仍不行，请点击下方“Download”查看。";
             extra.style.display = "";
           }
+          this.isLoading = false;
+          this.nextTryAt = Date.now() + 3e3;
           return;
         }
         if (this.objectUrl)
@@ -720,11 +798,22 @@
             loading.style.display = "none";
           this.collapseTopAreas();
           setTimeout(() => this.scrollToPanelButton(), 0);
+          this.isLoaded = true;
+          this.isLoading = false;
+          if (this.timer) {
+            try {
+              clearInterval(this.timer);
+            } catch (_) {
+            }
+            this.timer = null;
+          }
         };
       } catch (e) {
         const loading = document.getElementById("loadingMessage");
         if (loading)
           loading.style.display = "none";
+        this.isLoading = false;
+        this.nextTryAt = Date.now() + 3e3;
       }
     }
     collapseTopAreas() {
@@ -778,7 +867,7 @@
       const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
-          const res = await fetch(href, { method: "GET" });
+          const res = await fetch(href, { method: "GET", credentials: "include" });
           if (!res.ok)
             throw new Error(`HTTP ${res.status}`);
           const blob = await res.blob();

@@ -7,7 +7,7 @@ export default class DownloadPreviewer {
   constructor(gradeProps) {
     this.timer = null;
     this.objectUrl = null;
-    this.inited = false;
+    this.inited = false; // legacy flag (unused for stopping)
     this.iframe = null;
     this.container = null;
     this.maxHeightPx = null;
@@ -16,23 +16,94 @@ export default class DownloadPreviewer {
     this.memoRoot = null;
     this.gradeProps = gradeProps;
     this.hiddenEls = [];
+    this.isLoading = false;
+    this.isLoaded = false;
+    this.nextTryAt = 0;
     this.checkDOMReady();
   }
 
   checkDOMReady() {
     this.timer = setInterval(() => {
       try {
+        if (this.isLoaded) {
+          if (this.timer) { clearInterval(this.timer); this.timer = null; }
+          return;
+        }
         const btn = document.querySelector('#downloadPanelButton');
         const previewer = document.querySelector('#previewer');
         const inner = document.querySelector('#previewerInner');
-        if (btn && previewer && inner && !this.inited) {
-          this.inited = true;
-          clearInterval(this.timer);
-          this.timer = null;
-          this.replaceWithIframe(btn.getAttribute('href'), inner);
+        if (btn && previewer && inner) {
+          if (!this.isLoading && Date.now() >= this.nextTryAt) {
+            this.handleDownloadButton(btn, inner);
+          }
         }
       } catch (e) {}
     }, 500);
+  }
+
+  async handleDownloadButton(btn, container) {
+    try {
+      if (this.isLoaded || this.isLoading) return;
+      this.isLoading = true;
+      const href = this._getHref(btn);
+      const nameGuess = this._guessFileName(btn, href);
+      const looksPdfByName = nameGuess ? nameGuess.toLowerCase().endsWith('.pdf') : false;
+      let isPdf = looksPdfByName;
+      if (!isPdf) {
+        // fallback by header check (HEAD). If it fails, don't auto-download.
+        try {
+          const res = await fetch(href, { method: 'HEAD', credentials: 'include' });
+          const ct = (res.headers.get('content-type') || '').toLowerCase();
+          if (ct.includes('application/pdf')) isPdf = true;
+        } catch (_) {}
+      }
+      if (isPdf) {
+        await this.replaceWithIframe(href, container);
+      } else {
+        // Not a PDF: keep native preview/download UI unchanged.
+        this.isLoading = false;
+        this.nextTryAt = Date.now() + 3000; // re-check later in case late conversion
+      }
+    } catch (_) {}
+  }
+
+  _getHref(btn) {
+    let href = btn && btn.getAttribute('href');
+    if (!href || href.startsWith('javascript')) {
+      const dataHref = btn && (btn.getAttribute('data-href') || btn.dataset?.href);
+      if (dataHref) href = dataHref;
+    }
+    return href;
+  }
+
+  _guessFileName(btn, href) {
+    try {
+      // 1) attribute download
+      const dl = btn.getAttribute('download');
+      if (dl) return dl;
+      // 2) query string filename or name
+      if (href) {
+        try {
+          const u = new URL(href, window.location.href);
+          const qs = u.searchParams;
+          const cand = qs.get('filename') || qs.get('fileName') || qs.get('name');
+          if (cand) return decodeURIComponent(cand);
+          // 3) path segment
+          const path = decodeURIComponent(u.pathname || '');
+          const seg = path.split('/').filter(Boolean).pop();
+          if (seg && /\.[a-z0-9]{2,5}$/i.test(seg)) return seg;
+        } catch (_) {}
+      }
+      // 4) nearby DOM text inside download panel
+      const panel = document.getElementById('downloadPanel') || document.getElementById('previewer');
+      if (panel) {
+        const text = panel.textContent || '';
+        // simple heuristic to find *.ext
+        const m = text.match(/\b[^\s]+\.(pdf|docx?|pptx?|xlsx?)\b/i);
+        if (m) return m[0];
+      }
+    } catch (_) {}
+    return null;
   }
 
   async replaceWithIframe(href, container) {
@@ -48,6 +119,9 @@ export default class DownloadPreviewer {
           extra.textContent = '无法在线预览，请重新刷新页面。若仍不行，请点击下方“Download”查看。';
           extra.style.display = '';
         }
+        // allow polling to try again later
+        this.isLoading = false;
+        this.nextTryAt = Date.now() + 3000;
         return;
       }
       if (this.objectUrl) URL.revokeObjectURL(this.objectUrl);
@@ -105,10 +179,17 @@ export default class DownloadPreviewer {
 
         // Scroll to grading controls panel if available
         setTimeout(() => this.scrollToPanelButton(), 0);
+
+        // mark success and stop polling
+        this.isLoaded = true;
+        this.isLoading = false;
+        if (this.timer) { try { clearInterval(this.timer); } catch (_) {} this.timer = null; }
       };
     } catch (e) {
       const loading = document.getElementById('loadingMessage');
       if (loading) loading.style.display = 'none';
+      this.isLoading = false;
+      this.nextTryAt = Date.now() + 3000;
     }
   }
 
@@ -158,7 +239,7 @@ export default class DownloadPreviewer {
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        const res = await fetch(href, { method: 'GET' });
+        const res = await fetch(href, { method: 'GET', credentials: 'include' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const blob = await res.blob();
         let isPdf = false;
