@@ -1,7 +1,7 @@
 # Blackboard 增强 Pro | Blackboard Enhanced Pro
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/Version-1.0.2-blue.svg)](https://github.com/YZKnight/Blackboard-Enhanced-Pro)
+[![Version](https://img.shields.io/badge/Version-1.0.3-blue.svg)](https://github.com/YZKnight/Blackboard-Enhanced-Pro)
 [![GreasyFork](https://img.shields.io/badge/GreasyFork-Install-brightgreen.svg)](https://greasyfork.org/zh-CN/scripts/550546-blackboard-%E5%A2%9E%E5%BC%BA-pro-blackboard-enhanced-pro)
 [![UserScript](https://img.shields.io/badge/UserScript-Tampermonkey%20%7C%20Violentmonkey-orange.svg)](https://www.tampermonkey.net/)
 [![GitHub Stars](https://img.shields.io/github/stars/YZKnight/Blackboard-Enhanced-Pro?style=social)](https://github.com/YZKnight/Blackboard-Enhanced-Pro)
@@ -51,9 +51,10 @@
 - 点击附件按钮可查看 Assignment 附件，便于直接下载作业文档。
 
 #### For Teaching Assistant & Instructor
-![DDL POSTER-TA](assets/图片2.png)
+![DDL POSTER-TA](assets/img3.png)
 
-- 显示每个作业的截止时间（Due）与倒计时，并显示已提交份数。 
+- 显示每个作业的截止时间（Due）与倒计时，并显示已提交份数（包含重复Attempt）。
+- 展示已经批改的作业数与总提交数，便于了解批改进度。
 - 点击 Assignment 标题可直接跳转至 Grading 界面。 
 ![DDL POSTER-TA-Grading](assets/图片3.png)
 - 点击课程标题可进入课程页面。 
@@ -66,11 +67,13 @@
 ### 作业批改
 ![作业批改](assets/图片4.png)
 - 扣分统计与自动填分：在“给学习者的反馈”窗口输入扣分情况，格式为在“ - ”后输入扣分数值，脚本会自动识别并将扣分后的成绩填入“尝试”栏中。
+- 解决 PDF 不显示问题：优化“BB 不再显示 PDF”功能，提升兼容性与继承程度。
+- 解决 PDF 加载失败问题：修复部分浏览器中 PDF 加载失败的问题。
 - 新增扣分条：便于记录并可视化各扣分项，统计更直观。
 - 备忘录：在批改界面下方新增可本地保存的批注区，可用于记录答案与批改要点，刷新不丢失。
 - 布局优化与自动展开：自动展开批改界面、优化信息区分与排版，减少点击并提升可读性。
 - 浏览器兼容性与稳定性增强：修复原有显示问题并改进多浏览器适配。
-- 
+
 ## 变更与优化概览
 - DDL Poster
     1. 课程名称可点击跳转至对应课程
