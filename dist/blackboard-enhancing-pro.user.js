@@ -210,18 +210,19 @@
         return "Student";
       }
     };
-    const getAttemptCount = async (courseId, itemSourceId) => {
+    const getAttemptStats = async (courseId, itemSourceId) => {
       if (!courseId || !itemSourceId)
-        return 0;
+        return { total: 0, graded: 0 };
       const url = `/learn/api/public/v2/courses/${encodeURIComponent(courseId)}/gradebook/columns/${encodeURIComponent(itemSourceId)}/attempts`;
       try {
         const res = await fetch(url, { method: "GET" });
         const data = await res.json();
         const arr = data && Array.isArray(data.results) ? data.results : [];
-        return arr.length;
+        const graded = arr.reduce((n2, it) => n2 + (it && it.status === "Completed" ? 1 : 0), 0);
+        return { total: arr.length, graded };
       } catch (e) {
-        console.log("getAttemptCount error", e);
-        return 0;
+        console.log("getAttemptStats error", e);
+        return { total: 0, graded: 0 };
       }
     };
     const courseIds = Array.from(new Set(_todo_items.map((it) => it.courseId).filter(Boolean)));
@@ -232,7 +233,9 @@
           return it;
         const role = await getCourseRole(it.courseId);
         const isStudentRole = role === "Student";
-        const attemptCount = await getAttemptCount(it.courseId, it.itemSourceId);
+        const stats = await getAttemptStats(it.courseId, it.itemSourceId);
+        const attemptCount = stats.total;
+        const gradedCount = stats.graded;
         const submitted = attemptCount > 0;
         const needsGradingUrl = it.courseId ? `https://pibb.scu.edu.cn/webapps/gradebook/do/instructor/viewNeedsGrading?course_id=${encodeURIComponent(it.courseId)}` : null;
         return {
@@ -240,6 +243,7 @@
           isStudentRole,
           roleName: role,
           attemptCount,
+          gradedCount,
           submitted,
           needsGradingUrl
         };
@@ -456,10 +460,17 @@
           todo["eventType"] ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "line event-type", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "left", children: [
               todo["eventType"] === "Assignment" ? `Assignment - ${roleText}` : todo["eventType"],
-              todo["eventType"] === "Assignment" ? typeof todo.isStudentRole !== "undefined" && !todo.isStudentRole ? /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "status-badge submitted", children: [
-                "已提交",
-                Number.isFinite(todo.attemptCount) ? todo.attemptCount : 0,
-                "份"
+              todo["eventType"] === "Assignment" ? typeof todo.isStudentRole !== "undefined" && !todo.isStudentRole ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "status-badge submitted", children: [
+                  "已提交",
+                  Number.isFinite(todo.attemptCount) ? todo.attemptCount : 0,
+                  "份"
+                ] }),
+                typeof todo.gradedCount === "number" ? /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "status-badge submitted", children: [
+                  "已批改",
+                  Number.isFinite(todo.gradedCount) ? todo.gradedCount : 0,
+                  "份"
+                ] }) : null
               ] }) : typeof todo["submitted"] !== "undefined" && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `status-badge ${todo["submitted"] ? "submitted" : "pending"}`, children: todo["submitted"] ? "已提交" : "未提交" }) : null
             ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "right", style: { display: "inline-flex", gap: "6px" }, children: [
