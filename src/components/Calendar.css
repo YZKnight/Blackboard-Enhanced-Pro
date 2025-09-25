@@ -1,0 +1,382 @@
+.calendar-container {
+  position: fixed;
+  z-index: 10000;
+  width: 280px;
+  opacity: 0.8;
+  /* pointer-events: auto; */
+  /* border-radius: 20px; */
+}
+
+/* Override Blackboard default padding on .portlet .course within our module */
+.portlet#module\:_bbep_calendar .course {
+  padding: 0 !important;
+}
+
+.calendar-list {
+  width: 100%;
+  height: 80%;
+  overflow-y: scroll;
+  pointer-events: auto;
+  /* border-radius: 20px; */
+  max-height: 300px;
+  /* hide scrollbars cross-browser */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE 10+ */
+
+  ::-webkit-scrollbar {
+    width: 0;
+    background: transparent;
+  }
+}
+
+/* explicit webkit rule for element itself */
+.calendar-list::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.calendar-list-flat {
+  width: 100%;
+  background: #fff;
+}
+
+/* Vertical cards layout */
+.calendar-cards {
+  width: 100%;
+}
+
+.calendar-card {
+  background: #ffffff;
+  border: none;
+  border-left: 4px solid #137333; /* default green accent */
+  border-radius: 8px;
+  margin: 8px 8px;
+  padding: 8px 10px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.calendar-card.accent-red {
+  border-left-color: #d93025;
+}
+
+.calendar-card.accent-green {
+  border-left-color: #137333;
+}
+
+.calendar-card .line {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  color: #374151;
+}
+
+.calendar-card .line.assignment {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.calendar-card .line.assignment a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.calendar-card .line.assignment a:hover {
+  text-decoration: underline;
+}
+
+.calendar-card .line.event-type {
+  font-size: 12px;
+  color: #6b7280;
+  text-transform: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.calendar-card .line.event-type .status-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.calendar-card .line.event-type .status-badge.submitted {
+  background: #e6f4ea;
+  color: #137333;
+}
+
+.calendar-card .line.event-type .status-badge.pending {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.calendar-card .line.course a {
+  color: #0366d6;
+  text-decoration: none;
+}
+
+.calendar-card .line.course a:hover { text-decoration: underline; }
+
+.calendar-card .line.due { font-variant-numeric: tabular-nums; }
+
+.calendar-card .line.countdown { }
+
+/* legacy meta layout (unused now) */
+.calendar-card .meta { display: none; }
+
+.calendar-card .meta .course a {
+  color: #0366d6;
+  text-decoration: none;
+}
+
+.calendar-card .meta .course a:hover {
+  text-decoration: underline;
+}
+
+.countdown-pill {
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.countdown-pill.green {
+  background: #e6f4ea;
+  color: #137333;
+}
+
+.countdown-pill.red {
+  background: #fce8e6;
+  color: #d93025;
+}
+
+/* attachments UI */
+.calendar-card .attachments {
+  margin-top: 2px;
+}
+
+.attachments-link, .attachments-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  color: #374151;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.attachments-link .icon { opacity: 0.8; }
+
+.attachments-link:hover, .attachments-toggle:hover {
+  background: #f3f4f6;
+  border-color: #cbd5e1;
+}
+
+.attachments-link:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+.attachments-link.active {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #1d4ed8;
+}
+
+.attachments-list {
+  margin-top: 6px;
+  padding-left: 2px;
+  border-top: 1px dashed #e5e7eb;
+  padding-top: 6px;
+}
+
+.attachment-item a {
+  color: #0366d6;
+  text-decoration: none;
+}
+
+.attachment-item a:hover { text-decoration: underline; }
+
+/* Header toggle button style in module title */
+.portlet#module\:_bbep_calendar .bbep-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  color: #374151;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.portlet#module\:_bbep_calendar .bbep-toggle-btn:hover {
+  background: #f3f4f6;
+  border-color: #cbd5e1;
+}
+
+.portlet#module\:_bbep_calendar .bbep-toggle-btn.active {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #1d4ed8;
+}
+
+/* Title bar switch */
+.portlet#module\:_bbep_calendar .bbep-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #374151;
+}
+
+.portlet#module\:_bbep_calendar .bbep-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.portlet#module\:_bbep_calendar .bbep-slider {
+  width: 28px;
+  height: 16px;
+  background: #e5e7eb;
+  border: 1px solid #d1d5db;
+  border-radius: 9999px;
+  position: relative;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.portlet#module\:_bbep_calendar .bbep-switch:focus-within .bbep-slider {
+  box-shadow: 0 0 0 2px #93c5fd;
+}
+
+.portlet#module\:_bbep_calendar .bbep-slider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  transform: translateY(-50%);
+  width: 12px;
+  height: 12px;
+  background: #ffffff;
+  border-radius: 9999px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+  transition: left 0.2s ease;
+}
+
+.portlet#module\:_bbep_calendar .bbep-switch input:checked + .bbep-slider {
+  background: #60a5fa;
+  border-color: #3b82f6;
+}
+
+.portlet#module\:_bbep_calendar .bbep-switch input:checked + .bbep-slider::after {
+  left: 14px;
+}
+
+.calendar-header, .calendar-row {
+  display: grid;
+  grid-template-columns: 2fr 1.2fr 1.4fr 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+}
+
+.calendar-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f7f7f9;
+  font-weight: 600;
+  border-bottom: 1px solid #e5e5ea;
+}
+
+.calendar-row {
+  border-bottom: 1px solid #ececec;
+}
+
+.calendar-row .col-assignment {
+  font-weight: 600;
+  color: #1f2328;
+}
+
+.calendar-row .col-course a {
+  color: #0366d6;
+  text-decoration: none;
+}
+
+.calendar-row .col-course a:hover {
+  text-decoration: underline;
+}
+
+.calendar-row .col-due {
+  color: #444;
+  font-variant-numeric: tabular-nums;
+}
+
+.calendar-row .col-countdown {
+  font-weight: 700;
+}
+
+.calendar-row .col-countdown.green {
+  color: #137333;
+}
+
+.calendar-row .col-countdown.red {
+  color: #d93025;
+}
+
+.calendar-item {
+  width: 95%;
+  height: auto;
+  margin-top: 8px;
+  border-radius: 18px;
+  margin-left: 5px;
+  pointer-events: auto;
+
+  display: flex;
+  flex-direction: column;
+  align-items: left;
+  cursor: move;
+  user-select: none;
+
+  .assignment {
+    margin-top: 10px;
+    margin-left: 12px;
+    margin-right: 12px;
+    font-size: 17px;
+    font-weight: bold;
+    color: #f5f5f6;
+  }
+
+  .course-name {
+    display: inline;
+    margin-top: 5px;
+    margin-left: 12px;
+    margin-right: 8px;
+    font-weight: bold;
+    font-size: 10px;
+    color: #e0e0ef;
+    cursor: pointer;
+  }
+
+  .count-down {
+    margin-left: 12px;
+    margin-bottom: 10px;
+    font-weight: bold;
+    font-size: 22px;
+    color: #e0e0ce;
+  }
+}
