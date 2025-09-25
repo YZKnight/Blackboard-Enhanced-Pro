@@ -165,17 +165,18 @@ async function enrichRoleAndSubmission(_todo_items) {
     };
 
     // 获取尝试数量
-    const getAttemptCount = async (courseId, itemSourceId) => {
-        if (!courseId || !itemSourceId) return 0;
+    const getAttemptStats = async (courseId, itemSourceId) => {
+        if (!courseId || !itemSourceId) return { total: 0, graded: 0 };
         const url = `/learn/api/public/v2/courses/${encodeURIComponent(courseId)}/gradebook/columns/${encodeURIComponent(itemSourceId)}/attempts`;
         try {
             const res = await fetch(url, { method: 'GET' });
             const data = await res.json();
             const arr = (data && Array.isArray(data.results)) ? data.results : [];
-            return arr.length;
+            const graded = arr.reduce((n, it) => n + (it && it.status === 'Completed' ? 1 : 0), 0);
+            return { total: arr.length, graded };
         } catch (e) {
-            console.log('getAttemptCount error', e);
-            return 0;
+            console.log('getAttemptStats error', e);
+            return { total: 0, graded: 0 };
         }
     };
 
@@ -188,7 +189,9 @@ async function enrichRoleAndSubmission(_todo_items) {
             if (it.eventType !== 'Assignment') return it;
             const role = await getCourseRole(it.courseId);
             const isStudentRole = (role === 'Student');
-            const attemptCount = await getAttemptCount(it.courseId, it.itemSourceId);
+            const stats = await getAttemptStats(it.courseId, it.itemSourceId);
+            const attemptCount = stats.total;
+            const gradedCount = stats.graded;
             const submitted = attemptCount > 0; // 对学生：是否提交；对老师：只用于兼容
             const needsGradingUrl = it.courseId
                 ? `https://pibb.scu.edu.cn/webapps/gradebook/do/instructor/viewNeedsGrading?course_id=${encodeURIComponent(it.courseId)}`
@@ -198,6 +201,7 @@ async function enrichRoleAndSubmission(_todo_items) {
                 isStudentRole,
                 roleName: role,
                 attemptCount,
+                gradedCount,
                 submitted,
                 needsGradingUrl,
             };

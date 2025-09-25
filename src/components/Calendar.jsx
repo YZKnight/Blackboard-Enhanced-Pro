@@ -221,7 +221,12 @@ function CalendarCard({ todo, now, isGraded, onToggleGraded, draggableEnabled, h
                         {todo['eventType'] === 'Assignment' ? (
                             (typeof todo.isStudentRole !== 'undefined' && !todo.isStudentRole)
                                 ? (
-                                    <span className='status-badge submitted'>已提交{Number.isFinite(todo.attemptCount) ? todo.attemptCount : 0}份</span>
+                                    <>
+                                        <span className='status-badge submitted'>已提交{Number.isFinite(todo.attemptCount) ? todo.attemptCount : 0}份</span>
+                                        {typeof todo.gradedCount === 'number' ? (
+                                            <span className='status-badge submitted'>已批改{Number.isFinite(todo.gradedCount) ? todo.gradedCount : 0}份</span>
+                                        ) : null}
+                                    </>
                                 )
                                 : (
                                     (typeof todo['submitted'] !== 'undefined') && (
