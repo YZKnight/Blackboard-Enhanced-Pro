@@ -799,27 +799,35 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         return href;
       }
     }
-    async _ensureDocxPreview() {
-      if (window.docx && window.JSZip)
-        return window.docx;
-      if (_DownloadPreviewer._docxPreviewPromise)
-        return _DownloadPreviewer._docxPreviewPromise;
-      _DownloadPreviewer._docxPreviewPromise = Promise.resolve().then(() => {
+    async _ensureDocxPreviewIn(targetWin) {
+      if (!targetWin)
+        return null;
+      if (targetWin.docx && targetWin.JSZip)
+        return targetWin.docx;
+      const existing = _DownloadPreviewer._docxPreviewPromises.get(targetWin);
+      if (existing)
+        return existing;
+      const p2 = Promise.resolve().then(() => {
         try {
           const wrap = (code) => `;(function(){
   try { var module = undefined; var exports = undefined; var define = undefined; } catch(_){}
   ${code}
 })();`;
-          const indirectEval = (0, eval);
-          indirectEval(wrap(jszipBundle));
-          if (!window.JSZip && typeof JSZip !== "undefined")
-            window.JSZip = JSZip;
-          indirectEval(wrap(docxPreviewBundle));
+          const Fn = targetWin.Function;
+          new Fn(wrap(jszipBundle))();
+          if (!targetWin.JSZip && typeof targetWin.JSZip === "undefined" && typeof targetWin.JSZip !== "function" && typeof JSZip !== "undefined") {
+            try {
+              targetWin.JSZip = JSZip;
+            } catch (_) {
+            }
+          }
+          new Fn(wrap(docxPreviewBundle))();
         } catch (_) {
         }
-        return window.docx;
+        return targetWin.docx;
       });
-      return _DownloadPreviewer._docxPreviewPromise;
+      _DownloadPreviewer._docxPreviewPromises.set(targetWin, p2);
+      return p2;
     }
     async replaceWithPdfIframe(href, container) {
       try {
@@ -1000,11 +1008,22 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         } catch (_) {
         }
         this.updateIframeHeight();
-        const docx = await this._ensureDocxPreview().catch(() => null);
+        const targetWin = doc.defaultView || iframe.contentWindow;
+        const docx = await this._ensureDocxPreviewIn(targetWin).catch(() => null);
         if (!docx)
           throw new Error("docx-preview not available");
         try {
-          await docx.renderAsync(arrayBuffer, host, void 0, { inWrapper: true, className: "bbep-docx" });
+          let dataForDocx = null;
+          try {
+            dataForDocx = new targetWin.Uint8Array(arrayBuffer);
+          } catch (_) {
+            try {
+              dataForDocx = new targetWin.Blob([arrayBuffer], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+            } catch (_2) {
+              dataForDocx = arrayBuffer;
+            }
+          }
+          await docx.renderAsync(dataForDocx, host, void 0, { inWrapper: true, className: "bbep-docx" });
         } catch (e) {
           try {
             console.warn("[BBEP] docx-preview renderAsync error", e);
@@ -1197,8 +1216,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     }
   };
   // mammoth removed
-  // Lazy-load docx-preview and JSZip (order matters)
-  __publicField(_DownloadPreviewer, "_docxPreviewPromise", null);
+  // Lazy-load docx-preview/JSZip into a target window (iframe-safe)
+  __publicField(_DownloadPreviewer, "_docxPreviewPromises", /* @__PURE__ */ new WeakMap());
   let DownloadPreviewer = _DownloadPreviewer;
   function HeaderDedMeta() {
     const [count, setCount] = React.useState(() => _GM_getValue("bbep_ded_count", 5));

@@ -158,24 +158,29 @@ export default class DownloadPreviewer {
 
   // mammoth removed
 
-  // Lazy-load docx-preview and JSZip (order matters)
-  static _docxPreviewPromise = null;
-  async _ensureDocxPreview() {
-    if (window.docx && window.JSZip) return window.docx;
-    if (DownloadPreviewer._docxPreviewPromise) return DownloadPreviewer._docxPreviewPromise;
-    DownloadPreviewer._docxPreviewPromise = Promise.resolve().then(() => {
+  // Lazy-load docx-preview/JSZip into a target window (iframe-safe)
+  static _docxPreviewPromises = new WeakMap();
+  async _ensureDocxPreviewIn(targetWin) {
+    if (!targetWin) return null;
+    if (targetWin.docx && targetWin.JSZip) return targetWin.docx;
+    const existing = DownloadPreviewer._docxPreviewPromises.get(targetWin);
+    if (existing) return existing;
+    const p = Promise.resolve().then(() => {
       try {
         const wrap = (code) => `;(function(){\n  try { var module = undefined; var exports = undefined; var define = undefined; } catch(_){}\n  ${code}\n})();`;
-        const indirectEval = (0, eval); // eslint-disable-line no-eval
+        const Fn = targetWin.Function; // evaluate in iframe's global context
         // Load JSZip first
-        indirectEval(wrap(jszipBundle));
-        if (!window.JSZip && typeof JSZip !== 'undefined') window.JSZip = JSZip;
+        new Fn(wrap(jszipBundle))();
+        if (!targetWin.JSZip && typeof targetWin.JSZip === 'undefined' && typeof targetWin.JSZip !== 'function' && typeof JSZip !== 'undefined') {
+          try { targetWin.JSZip = JSZip; } catch (_) {}
+        }
         // Then docx-preview
-        indirectEval(wrap(docxPreviewBundle));
+        new Fn(wrap(docxPreviewBundle))();
       } catch (_) {}
-      return window.docx;
+      return targetWin.docx;
     });
-    return DownloadPreviewer._docxPreviewPromise;
+    DownloadPreviewer._docxPreviewPromises.set(targetWin, p);
+    return p;
   }
 
   async replaceWithPdfIframe(href, container) {
@@ -354,12 +359,25 @@ export default class DownloadPreviewer {
       } catch (_) {}
       this.updateIframeHeight();
 
-      // Load docx-preview and render
-      const docx = await this._ensureDocxPreview().catch(() => null);
+      // Load docx-preview into the iframe window and render
+      const targetWin = doc.defaultView || iframe.contentWindow;
+      const docx = await this._ensureDocxPreviewIn(targetWin).catch(() => null);
       if (!docx) throw new Error('docx-preview not available');
 
       try {
-        await docx.renderAsync(arrayBuffer, host, undefined, { inWrapper: true, className: 'bbep-docx' });
+        // Ensure the data is a supported type bound to the iframe realm
+        // Prefer Uint8Array from target window to avoid cross-realm instanceof issues
+        let dataForDocx = null;
+        try {
+          dataForDocx = new targetWin.Uint8Array(arrayBuffer);
+        } catch (_) {
+          try {
+            dataForDocx = new targetWin.Blob([arrayBuffer], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+          } catch (_) {
+            dataForDocx = arrayBuffer; // last resort
+          }
+        }
+        await docx.renderAsync(dataForDocx, host, undefined, { inWrapper: true, className: 'bbep-docx' });
       } catch (e) {
         try { console.warn('[BBEP] docx-preview renderAsync error', e); } catch (_) {}
         throw e;
