@@ -4,6 +4,7 @@ import ReactDOM from 'react-dom/client';
 
 import { Calendar } from "./components/Calendar";
 import { GradeAssignment } from "./components/GradeAssignment";
+import StudentSubmissionPreview from './components/assignment/StudentSubmissionPreview';
 
 
 import {
@@ -38,6 +39,9 @@ function App() {
   const [todoItems, setTodoItems] = useState(null);
 
   useEffect(() => {
+    // Only fetch calendar/attempts on the Portal tabAction page to avoid waste on other routes
+    const isPortalTabAction = window.location.href.startsWith('https://pibb.scu.edu.cn/webapps/portal/execute/tabs/tabAction');
+    if (!isPortalTabAction) return;
     const fetchTodoItems = async () => {
       const items = await calendarInfoCatch();
       setTodoItems(items);
@@ -54,8 +58,9 @@ function App() {
 
   // Mount Calendar as a Blackboard module inside column when on portal page
   useEffect(() => {
-    const isPortal = window.location.href.startsWith('https://pibb.scu.edu.cn/webapps/portal');
-    if (!isPortal || !env.calendar.display || !todoItems) return;
+    // Only render DDL Poster on the Portal tabAction page
+    const isPortalTabAction = window.location.href.startsWith('https://pibb.scu.edu.cn/webapps/portal/execute/tabs/tabAction');
+    if (!isPortalTabAction || !env.calendar.display || !todoItems) return;
 
     // Try to find host column (prefer #column2)
     const host = document.getElementById('column2')
@@ -164,7 +169,12 @@ function App() {
 
 
   return <>
-    {window.location.href.startsWith('https://pibb.scu.edu.cn/webapps/assignment/gradeAssignmentRedirector') && env.assignment.display ? <GradeAssignment env={env} setEnv={setEnv} /> : null}
+    {window.location.href.startsWith('https://pibb.scu.edu.cn/webapps/assignment/gradeAssignmentRedirector') && env.assignment.display ? (
+      <GradeAssignment env={env} setEnv={setEnv} />
+    ) : null}
+    {window.location.href.startsWith('https://pibb.scu.edu.cn/webapps/assignment/uploadAssignment') && env.assignment.display ? (
+      <StudentSubmissionPreview />
+    ) : null}
   </>
 }
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Blackboard 增强 Pro | Blackboard Enhanced Pro
 // @namespace    npm/vite-plugin-monkey
-// @version      1.1.0
+// @version      1.2.0
 // @author       Miang
 // @description  Blackboard 增强插件，For SCUPIANS
 // @license      MIT
@@ -677,9 +677,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             }
             return;
           }
-          const btn = document.querySelector("#downloadPanelButton");
+          const btn = this._findDownloadButton();
           const previewer = document.querySelector("#previewer");
-          const inner = document.querySelector("#previewerInner");
+          const inner = document.querySelector("#previewerInner") || previewer || document.getElementById("currentAttempt_submission") || document.getElementById("content") || document.getElementById("contentPanel");
           if (btn && previewer && inner) {
             if (!this.isLoading && Date.now() >= this.nextTryAt) {
               this.handleDownloadButton(btn, inner);
@@ -740,6 +740,23 @@ https://github.com/nodeca/pako/blob/main/LICENSE
           href = dataHref;
       }
       return href;
+    }
+    _findDownloadButton() {
+      let el = document.querySelector("#downloadPanelButton, #downloadButton");
+      if (el)
+        return el;
+      const anchors = Array.from(document.querySelectorAll("#downloadPanel a, #previewer a, a"));
+      for (const a of anchors) {
+        const href = a.getAttribute("href") || a.getAttribute("data-href") || "";
+        const txt = (a.textContent || "").trim().toLowerCase();
+        const title = (a.getAttribute("title") || "").toLowerCase();
+        const aria = (a.getAttribute("aria-label") || "").toLowerCase();
+        const looksDownload = txt.includes("download") || txt.includes("下载") || title.includes("download") || title.includes("下载") || aria.includes("download") || aria.includes("下载") || a.id && a.id.toLowerCase().includes("download") || (a.className || "").toLowerCase().includes("download");
+        const looksFile = /\.(pdf|docx?)($|\?|#)/i.test(href || "");
+        if (looksDownload || looksFile)
+          return a;
+      }
+      return null;
     }
     _guessFileName(btn, href) {
       try {
@@ -834,31 +851,43 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             this.maxHeightPx = Math.max(100, Math.floor(h));
         } catch (_) {
         }
-        while (container.firstChild)
-          container.removeChild(container.firstChild);
-        const dedMount = document.createElement("div");
-        container.appendChild(dedMount);
-        try {
-          this.dedRoot = client.createRoot(dedMount);
-          this.dedRoot.render(/* @__PURE__ */ jsxRuntimeExports.jsx(DeductionsToolbar, {}));
-        } catch (_) {
+        const enableTools = !(this.gradeProps && this.gradeProps.enableTools === false);
+        if (enableTools) {
+          while (container.firstChild)
+            container.removeChild(container.firstChild);
+          const dedMount = document.createElement("div");
+          container.appendChild(dedMount);
+          try {
+            this.dedRoot = client.createRoot(dedMount);
+            this.dedRoot.render(/* @__PURE__ */ jsxRuntimeExports.jsx(DeductionsToolbar, {}));
+          } catch (_) {
+          }
+          const memoHost = document.createElement("div");
+          memoHost.className = "bbep-preview-memo";
+          container.appendChild(memoHost);
+          try {
+            this.memoRoot = client.createRoot(memoHost);
+            this.memoRoot.render(/* @__PURE__ */ jsxRuntimeExports.jsx(Memo, { props: this.gradeProps }));
+          } catch (_) {
+          }
+          this.toolbar = memoHost;
         }
-        const memoHost = document.createElement("div");
-        memoHost.className = "bbep-preview-memo";
-        container.appendChild(memoHost);
-        try {
-          this.memoRoot = client.createRoot(memoHost);
-          this.memoRoot.render(/* @__PURE__ */ jsxRuntimeExports.jsx(Memo, { props: this.gradeProps }));
-        } catch (_) {
-        }
-        this.toolbar = memoHost;
         const iframe = document.createElement("iframe");
         iframe.src = this.objectUrl;
         iframe.style.width = "100%";
         iframe.style.border = "0";
         iframe.style.visibility = "hidden";
         iframe.setAttribute("title", "Assignment Preview");
-        container.appendChild(iframe);
+        if (enableTools) {
+          container.appendChild(iframe);
+        } else {
+          const existing = container.querySelector("iframe, object, embed");
+          if (existing && existing.parentNode === container) {
+            container.replaceChild(iframe, existing);
+          } else {
+            container.appendChild(iframe);
+          }
+        }
         this.iframe = iframe;
         this.container = container;
         this.updateIframeHeight();
@@ -873,8 +902,11 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             downloadPanel.style.display = "none";
           if (loading)
             loading.style.display = "none";
-          this.collapseTopAreas();
-          setTimeout(() => this.scrollToPanelButton(), 0);
+          if (enableTools) {
+            this.collapseTopAreas();
+          }
+          if (enableTools)
+            setTimeout(() => this.scrollToPanelButton(), 0);
           this.isLoaded = true;
           this.isLoading = false;
           if (this.timer) {
@@ -907,30 +939,42 @@ https://github.com/nodeca/pako/blob/main/LICENSE
           this.nextTryAt = Date.now() + 3e3;
           return;
         }
-        while (container.firstChild)
-          container.removeChild(container.firstChild);
-        const dedMount = document.createElement("div");
-        container.appendChild(dedMount);
-        try {
-          this.dedRoot = client.createRoot(dedMount);
-          this.dedRoot.render(/* @__PURE__ */ jsxRuntimeExports.jsx(DeductionsToolbar, {}));
-        } catch (_) {
+        const enableTools = !(this.gradeProps && this.gradeProps.enableTools === false);
+        if (enableTools) {
+          while (container.firstChild)
+            container.removeChild(container.firstChild);
+          const dedMount = document.createElement("div");
+          container.appendChild(dedMount);
+          try {
+            this.dedRoot = client.createRoot(dedMount);
+            this.dedRoot.render(/* @__PURE__ */ jsxRuntimeExports.jsx(DeductionsToolbar, {}));
+          } catch (_) {
+          }
+          const memoHost = document.createElement("div");
+          memoHost.className = "bbep-preview-memo";
+          container.appendChild(memoHost);
+          try {
+            this.memoRoot = client.createRoot(memoHost);
+            this.memoRoot.render(/* @__PURE__ */ jsxRuntimeExports.jsx(Memo, { props: this.gradeProps }));
+          } catch (_) {
+          }
+          this.toolbar = memoHost;
         }
-        const memoHost = document.createElement("div");
-        memoHost.className = "bbep-preview-memo";
-        container.appendChild(memoHost);
-        try {
-          this.memoRoot = client.createRoot(memoHost);
-          this.memoRoot.render(/* @__PURE__ */ jsxRuntimeExports.jsx(Memo, { props: this.gradeProps }));
-        } catch (_) {
-        }
-        this.toolbar = memoHost;
         const iframe = document.createElement("iframe");
         iframe.style.width = "100%";
         iframe.style.border = "0";
         iframe.style.visibility = "hidden";
         iframe.setAttribute("title", "Assignment Preview");
-        container.appendChild(iframe);
+        if (enableTools) {
+          container.appendChild(iframe);
+        } else {
+          const existing = container.querySelector("iframe, object, embed");
+          if (existing && existing.parentNode === container) {
+            container.replaceChild(iframe, existing);
+          } else {
+            container.appendChild(iframe);
+          }
+        }
         this.iframe = iframe;
         this.container = container;
         const doc = iframe.contentDocument || ((_a = iframe.contentWindow) == null ? void 0 : _a.document);
@@ -976,8 +1020,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
           downloadPanel.style.display = "none";
         if (loading)
           loading.style.display = "none";
-        this.collapseTopAreas();
-        setTimeout(() => this.scrollToPanelButton(), 0);
+        if (enableTools) {
+          this.collapseTopAreas();
+          setTimeout(() => this.scrollToPanelButton(), 0);
+        }
         this.isLoaded = true;
         this.isLoading = false;
         if (this.timer) {
@@ -1336,6 +1382,18 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     }, []);
     return /* @__PURE__ */ jsxRuntimeExports.jsx(jsxRuntimeExports.Fragment, {});
   }
+  function StudentSubmissionPreview() {
+    React.useEffect(() => {
+      const DP = new DownloadPreviewer({ enableTools: false });
+      return () => {
+        try {
+          DP.remove();
+        } catch (_) {
+        }
+      };
+    }, []);
+    return null;
+  }
   function App() {
     const [env, setEnv] = React.useState(
       _GM_getValue("env", {
@@ -1352,6 +1410,9 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     );
     const [todoItems, setTodoItems] = React.useState(null);
     React.useEffect(() => {
+      const isPortalTabAction = window.location.href.startsWith("https://pibb.scu.edu.cn/webapps/portal/execute/tabs/tabAction");
+      if (!isPortalTabAction)
+        return;
       const fetchTodoItems = async () => {
         const items = await calendarInfoCatch();
         setTodoItems(items);
@@ -1363,8 +1424,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       console.log("Setting Saved");
     }, [env]);
     React.useEffect(() => {
-      const isPortal = window.location.href.startsWith("https://pibb.scu.edu.cn/webapps/portal");
-      if (!isPortal || !env.calendar.display || !todoItems)
+      const isPortalTabAction = window.location.href.startsWith("https://pibb.scu.edu.cn/webapps/portal/execute/tabs/tabAction");
+      if (!isPortalTabAction || !env.calendar.display || !todoItems)
         return;
       const host = document.getElementById("column2") || document.querySelector("#column1") || document.querySelector(".column-3") || document.body;
       let moduleEl = document.getElementById("module:_bbep_calendar");
@@ -1449,7 +1510,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         }
       };
     }, [todoItems, env.calendar.display, env.calendar.showSubmitted]);
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(jsxRuntimeExports.Fragment, { children: window.location.href.startsWith("https://pibb.scu.edu.cn/webapps/assignment/gradeAssignmentRedirector") && env.assignment.display ? /* @__PURE__ */ jsxRuntimeExports.jsx(GradeAssignment, { env, setEnv }) : null });
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+      window.location.href.startsWith("https://pibb.scu.edu.cn/webapps/assignment/gradeAssignmentRedirector") && env.assignment.display ? /* @__PURE__ */ jsxRuntimeExports.jsx(GradeAssignment, { env, setEnv }) : null,
+      window.location.href.startsWith("https://pibb.scu.edu.cn/webapps/assignment/uploadAssignment") && env.assignment.display ? /* @__PURE__ */ jsxRuntimeExports.jsx(StudentSubmissionPreview, {}) : null
+    ] });
   }
   client.createRoot(
     (() => {

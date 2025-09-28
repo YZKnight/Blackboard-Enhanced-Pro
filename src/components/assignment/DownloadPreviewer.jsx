@@ -31,9 +31,13 @@ export default class DownloadPreviewer {
           if (this.timer) { clearInterval(this.timer); this.timer = null; }
           return;
         }
-        const btn = document.querySelector('#downloadPanelButton');
+        const btn = this._findDownloadButton();
         const previewer = document.querySelector('#previewer');
-        const inner = document.querySelector('#previewerInner');
+        const inner = document.querySelector('#previewerInner')
+          || previewer
+          || document.getElementById('currentAttempt_submission')
+          || document.getElementById('content')
+          || document.getElementById('contentPanel');
         if (btn && previewer && inner) {
           if (!this.isLoading && Date.now() >= this.nextTryAt) {
             this.handleDownloadButton(btn, inner);
@@ -91,6 +95,28 @@ export default class DownloadPreviewer {
       if (dataHref) href = dataHref;
     }
     return href;
+  }
+
+  _findDownloadButton() {
+    // Common IDs/classes first
+    let el = document.querySelector('#downloadPanelButton, #downloadButton');
+    if (el) return el;
+    // Generic scan for anchor elements that look like download links
+    const anchors = Array.from(document.querySelectorAll('#downloadPanel a, #previewer a, a'));
+    for (const a of anchors) {
+      const href = a.getAttribute('href') || a.getAttribute('data-href') || '';
+      const txt = (a.textContent || '').trim().toLowerCase();
+      const title = (a.getAttribute('title') || '').toLowerCase();
+      const aria = (a.getAttribute('aria-label') || '').toLowerCase();
+      const looksDownload = txt.includes('download') || txt.includes('下载')
+        || title.includes('download') || title.includes('下载')
+        || aria.includes('download') || aria.includes('下载')
+        || (a.id && a.id.toLowerCase().includes('download'))
+        || ((a.className || '').toLowerCase().includes('download'));
+      const looksFile = /\.(pdf|docx?)($|\?|#)/i.test(href || '');
+      if (looksDownload || looksFile) return a;
+    }
+    return null;
   }
 
   _guessFileName(btn, href) {
@@ -181,23 +207,25 @@ export default class DownloadPreviewer {
         if (h) this.maxHeightPx = Math.max(100, Math.floor(h));
       } catch (_) {}
 
-      while (container.firstChild) container.removeChild(container.firstChild);
+      const enableTools = !(this.gradeProps && this.gradeProps.enableTools === false);
+      if (enableTools) {
+        while (container.firstChild) container.removeChild(container.firstChild);
+        const dedMount = document.createElement('div');
+        container.appendChild(dedMount);
+        try {
+          this.dedRoot = ReactDOM.createRoot(dedMount);
+          this.dedRoot.render(<DeductionsToolbar />);
+        } catch (_) {}
 
-      const dedMount = document.createElement('div');
-      container.appendChild(dedMount);
-      try {
-        this.dedRoot = ReactDOM.createRoot(dedMount);
-        this.dedRoot.render(<DeductionsToolbar />);
-      } catch (_) {}
-
-      const memoHost = document.createElement('div');
-      memoHost.className = 'bbep-preview-memo';
-      container.appendChild(memoHost);
-      try {
-        this.memoRoot = ReactDOM.createRoot(memoHost);
-        this.memoRoot.render(<Memo props={this.gradeProps} />);
-      } catch (_) {}
-      this.toolbar = memoHost;
+        const memoHost = document.createElement('div');
+        memoHost.className = 'bbep-preview-memo';
+        container.appendChild(memoHost);
+        try {
+          this.memoRoot = ReactDOM.createRoot(memoHost);
+          this.memoRoot.render(<Memo props={this.gradeProps} />);
+        } catch (_) {}
+        this.toolbar = memoHost;
+      }
 
       const iframe = document.createElement('iframe');
       iframe.src = this.objectUrl;
@@ -205,7 +233,16 @@ export default class DownloadPreviewer {
       iframe.style.border = '0';
       iframe.style.visibility = 'hidden';
       iframe.setAttribute('title', 'Assignment Preview');
-      container.appendChild(iframe);
+      if (enableTools) {
+        container.appendChild(iframe);
+      } else {
+        const existing = container.querySelector('iframe, object, embed');
+        if (existing && existing.parentNode === container) {
+          container.replaceChild(iframe, existing);
+        } else {
+          container.appendChild(iframe);
+        }
+      }
 
       this.iframe = iframe;
       this.container = container;
@@ -220,11 +257,13 @@ export default class DownloadPreviewer {
         if (downloadPanel) downloadPanel.style.display = 'none';
         if (loading) loading.style.display = 'none';
 
-        // Collapse top nav and breadcrumbs after PDF is ready
-        this.collapseTopAreas();
+        if (enableTools) {
+          // Collapse top nav and breadcrumbs after PDF is ready
+          this.collapseTopAreas();
+        }
 
         // Scroll to grading controls panel if available
-        setTimeout(() => this.scrollToPanelButton(), 0);
+        if (enableTools) setTimeout(() => this.scrollToPanelButton(), 0);
 
         // mark success and stop polling
         this.isLoaded = true;
@@ -252,24 +291,26 @@ export default class DownloadPreviewer {
         return;
       }
 
-      // Replace container children, mount toolbar + memo
-      while (container.firstChild) container.removeChild(container.firstChild);
+      const enableTools = !(this.gradeProps && this.gradeProps.enableTools === false);
+      if (enableTools) {
+        // Replace container children, mount toolbar + memo
+        while (container.firstChild) container.removeChild(container.firstChild);
+        const dedMount = document.createElement('div');
+        container.appendChild(dedMount);
+        try {
+          this.dedRoot = ReactDOM.createRoot(dedMount);
+          this.dedRoot.render(<DeductionsToolbar />);
+        } catch (_) {}
 
-      const dedMount = document.createElement('div');
-      container.appendChild(dedMount);
-      try {
-        this.dedRoot = ReactDOM.createRoot(dedMount);
-        this.dedRoot.render(<DeductionsToolbar />);
-      } catch (_) {}
-
-      const memoHost = document.createElement('div');
-      memoHost.className = 'bbep-preview-memo';
-      container.appendChild(memoHost);
-      try {
-        this.memoRoot = ReactDOM.createRoot(memoHost);
-        this.memoRoot.render(<Memo props={this.gradeProps} />);
-      } catch (_) {}
-      this.toolbar = memoHost;
+        const memoHost = document.createElement('div');
+        memoHost.className = 'bbep-preview-memo';
+        container.appendChild(memoHost);
+        try {
+          this.memoRoot = ReactDOM.createRoot(memoHost);
+          this.memoRoot.render(<Memo props={this.gradeProps} />);
+        } catch (_) {}
+        this.toolbar = memoHost;
+      }
 
       // Create an iframe and render docx inside it using docx-preview
       const iframe = document.createElement('iframe');
@@ -277,7 +318,16 @@ export default class DownloadPreviewer {
       iframe.style.border = '0';
       iframe.style.visibility = 'hidden';
       iframe.setAttribute('title', 'Assignment Preview');
-      container.appendChild(iframe);
+      if (enableTools) {
+        container.appendChild(iframe);
+      } else {
+        const existing = container.querySelector('iframe, object, embed');
+        if (existing && existing.parentNode === container) {
+          container.replaceChild(iframe, existing);
+        } else {
+          container.appendChild(iframe);
+        }
+      }
 
       this.iframe = iframe;
       this.container = container;
@@ -324,8 +374,10 @@ export default class DownloadPreviewer {
       if (downloadPanel) downloadPanel.style.display = 'none';
       if (loading) loading.style.display = 'none';
 
-      this.collapseTopAreas();
-      setTimeout(() => this.scrollToPanelButton(), 0);
+      if (enableTools) {
+        this.collapseTopAreas();
+        setTimeout(() => this.scrollToPanelButton(), 0);
+      }
 
       this.isLoaded = true;
       this.isLoading = false;
