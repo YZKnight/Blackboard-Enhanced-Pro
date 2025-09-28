@@ -1,7 +1,7 @@
 # Blackboard 增强 Pro | Blackboard Enhanced Pro
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/Version-1.0.3-blue.svg)](https://github.com/YZKnight/Blackboard-Enhanced-Pro)
+[![Version](https://img.shields.io/badge/Version-1.2.1-blue.svg)](https://github.com/YZKnight/Blackboard-Enhanced-Pro)
 [![GreasyFork](https://img.shields.io/badge/GreasyFork-Install-brightgreen.svg)](https://greasyfork.org/zh-CN/scripts/550546-blackboard-%E5%A2%9E%E5%BC%BA-pro-blackboard-enhanced-pro)
 [![UserScript](https://img.shields.io/badge/UserScript-Tampermonkey%20%7C%20Violentmonkey-orange.svg)](https://www.tampermonkey.net/)
 [![GitHub Stars](https://img.shields.io/github/stars/YZKnight/Blackboard-Enhanced-Pro?style=social)](https://github.com/YZKnight/Blackboard-Enhanced-Pro)
