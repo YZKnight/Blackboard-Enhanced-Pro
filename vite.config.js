@@ -10,12 +10,13 @@ export default defineConfig({
       entry: 'src/main.jsx',
       userscript: {
         name: 'Blackboard 增强 Pro | Blackboard Enhanced Pro',
-        version: '1.0.3',
+        version: '1.2.2',
         namespace: 'npm/vite-plugin-monkey',
         match: ['https://pibb.scu.edu.cn/*'],
         license: 'MIT',
           description: 'Blackboard 增强插件，For SCUPIANS',
-
+          updateURL: 'http://pibb.mydev.icu/blackboard-enhancing-pro.user.js',
+          downloadURL: 'http://pibb.mydev.icu/blackboard-enhancing-pro.user.js'
       },
       build: {
         externalGlobals: {
