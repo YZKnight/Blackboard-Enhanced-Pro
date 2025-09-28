@@ -2,6 +2,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import DeductionsToolbar from './DeductionsToolbar';
 import Memo from './Memo';
+import jszipBundle from '../../vendor/jszip.min.js?raw';
+import docxPreviewBundle from '../../vendor/docx-preview.min.js?raw';
 
 export default class DownloadPreviewer {
   constructor(gradeProps) {
@@ -46,21 +48,36 @@ export default class DownloadPreviewer {
       if (this.isLoaded || this.isLoading) return;
       this.isLoading = true;
       const href = this._getHref(btn);
+      const absHref = this._toAbsoluteUrl(href);
       const nameGuess = this._guessFileName(btn, href);
-      const looksPdfByName = nameGuess ? nameGuess.toLowerCase().endsWith('.pdf') : false;
+      const lower = (nameGuess || '').toLowerCase();
+      const looksPdfByName = lower.endsWith('.pdf');
+      const looksDocxByName = lower.endsWith('.docx');
+      const looksDocByName = lower.endsWith('.doc') && !lower.endsWith('.docx');
+
       let isPdf = looksPdfByName;
-      if (!isPdf) {
-        // fallback by header check (HEAD). If it fails, don't auto-download.
+      let isDocx = looksDocxByName;
+      let isDoc = looksDocByName;
+      if (!isPdf && !isDocx && !isDoc) {
+        // Fallback by header check (HEAD). If it fails, don't auto-embed.
         try {
-          const res = await fetch(href, { method: 'HEAD', credentials: 'include' });
+          const res = await fetch(absHref, { method: 'HEAD', credentials: 'include' });
           const ct = (res.headers.get('content-type') || '').toLowerCase();
           if (ct.includes('application/pdf')) isPdf = true;
+          if (ct.includes('application/vnd.openxmlformats-officedocument.wordprocessingml.document')) isDocx = true;
+          if (ct.includes('application/msword')) isDoc = true;
         } catch (_) {}
       }
       if (isPdf) {
-        await this.replaceWithIframe(href, container);
+        await this.replaceWithPdfIframe(absHref, container);
+      } else if (isDocx) {
+        await this.replaceWithDocxIframe(absHref, container);
+      } else if (isDoc) {
+        // .doc (97-2003) not supported for in-browser rendering; preserve native UI
+        this.isLoading = false;
+        this.nextTryAt = Date.now() + 3000;
       } else {
-        // Not a PDF: keep native preview/download UI unchanged.
+        // Unsupported type: keep native preview/download UI unchanged.
         this.isLoading = false;
         this.nextTryAt = Date.now() + 3000; // re-check later in case late conversion
       }
@@ -99,14 +116,43 @@ export default class DownloadPreviewer {
       if (panel) {
         const text = panel.textContent || '';
         // simple heuristic to find *.ext
-        const m = text.match(/\b[^\s]+\.(pdf|docx?|pptx?|xlsx?)\b/i);
+        const m = text.match(/\b[^\s]+\.(pdf|docx?)\b/i);
         if (m) return m[0];
       }
     } catch (_) {}
     return null;
   }
 
-  async replaceWithIframe(href, container) {
+  _toAbsoluteUrl(href) {
+    try {
+      if (!href) return href;
+      return new URL(href, window.location.href).href;
+    } catch (_) { return href; }
+  }
+
+  // mammoth removed
+
+  // Lazy-load docx-preview and JSZip (order matters)
+  static _docxPreviewPromise = null;
+  async _ensureDocxPreview() {
+    if (window.docx && window.JSZip) return window.docx;
+    if (DownloadPreviewer._docxPreviewPromise) return DownloadPreviewer._docxPreviewPromise;
+    DownloadPreviewer._docxPreviewPromise = Promise.resolve().then(() => {
+      try {
+        const wrap = (code) => `;(function(){\n  try { var module = undefined; var exports = undefined; var define = undefined; } catch(_){}\n  ${code}\n})();`;
+        const indirectEval = (0, eval); // eslint-disable-line no-eval
+        // Load JSZip first
+        indirectEval(wrap(jszipBundle));
+        if (!window.JSZip && typeof JSZip !== 'undefined') window.JSZip = JSZip;
+        // Then docx-preview
+        indirectEval(wrap(docxPreviewBundle));
+      } catch (_) {}
+      return window.docx;
+    });
+    return DownloadPreviewer._docxPreviewPromise;
+  }
+
+  async replaceWithPdfIframe(href, container) {
     try {
       const loading = document.getElementById('loadingMessage');
       if (loading) loading.style.display = '';
@@ -183,13 +229,117 @@ export default class DownloadPreviewer {
         // mark success and stop polling
         this.isLoaded = true;
         this.isLoading = false;
-        if (this.timer) { try { clearInterval(this.timer); } catch (_) {} this.timer = null; }
+      if (this.timer) { try { clearInterval(this.timer); } catch (_) {} this.timer = null; }
       };
     } catch (e) {
       const loading = document.getElementById('loadingMessage');
       if (loading) loading.style.display = 'none';
       this.isLoading = false;
       this.nextTryAt = Date.now() + 3000;
+    }
+  }
+
+  async replaceWithDocxIframe(absHref, container) {
+    try {
+      const loading = document.getElementById('loadingMessage');
+      if (loading) loading.style.display = '';
+
+      const arrayBuffer = await this._downloadArrayBufferWithRetry(absHref, 3);
+      if (!arrayBuffer) {
+        if (loading) loading.style.display = 'none';
+        this.isLoading = false;
+        this.nextTryAt = Date.now() + 3000;
+        return;
+      }
+
+      // Replace container children, mount toolbar + memo
+      while (container.firstChild) container.removeChild(container.firstChild);
+
+      const dedMount = document.createElement('div');
+      container.appendChild(dedMount);
+      try {
+        this.dedRoot = ReactDOM.createRoot(dedMount);
+        this.dedRoot.render(<DeductionsToolbar />);
+      } catch (_) {}
+
+      const memoHost = document.createElement('div');
+      memoHost.className = 'bbep-preview-memo';
+      container.appendChild(memoHost);
+      try {
+        this.memoRoot = ReactDOM.createRoot(memoHost);
+        this.memoRoot.render(<Memo props={this.gradeProps} />);
+      } catch (_) {}
+      this.toolbar = memoHost;
+
+      // Create an iframe and render docx inside it using docx-preview
+      const iframe = document.createElement('iframe');
+      iframe.style.width = '100%';
+      iframe.style.border = '0';
+      iframe.style.visibility = 'hidden';
+      iframe.setAttribute('title', 'Assignment Preview');
+      container.appendChild(iframe);
+
+      this.iframe = iframe;
+      this.container = container;
+
+      // Prepare doc
+      const doc = iframe.contentDocument || iframe.contentWindow?.document;
+      if (!doc) throw new Error('no iframe document');
+      doc.open();
+      doc.write('<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:16px;"></body></html>');
+      doc.close();
+
+      // Host for docx-preview
+      const host = doc.createElement('div');
+      host.id = 'bbep-docx-root';
+      doc.body.appendChild(host);
+
+      // Estimate height similar to PDF flow
+      try {
+        const outer = document.getElementById('previewer');
+        let h = 0;
+        if (outer) h = outer.getBoundingClientRect().height;
+        if (!h && container) h = container.getBoundingClientRect().height;
+        if (h) this.maxHeightPx = Math.max(100, Math.floor(h));
+      } catch (_) {}
+      this.updateIframeHeight();
+
+      // Load docx-preview and render
+      const docx = await this._ensureDocxPreview().catch(() => null);
+      if (!docx) throw new Error('docx-preview not available');
+
+      try {
+        await docx.renderAsync(arrayBuffer, host, undefined, { inWrapper: true, className: 'bbep-docx' });
+      } catch (e) {
+        try { console.warn('[BBEP] docx-preview renderAsync error', e); } catch (_) {}
+        throw e;
+      }
+
+      // Mark loaded and update visuals
+      try {
+        iframe.style.visibility = '';
+        this.updateIframeHeight();
+      } catch (_) {}
+      const downloadPanel = document.getElementById('downloadPanel');
+      if (downloadPanel) downloadPanel.style.display = 'none';
+      if (loading) loading.style.display = 'none';
+
+      this.collapseTopAreas();
+      setTimeout(() => this.scrollToPanelButton(), 0);
+
+      this.isLoaded = true;
+      this.isLoading = false;
+      if (this.timer) { try { clearInterval(this.timer); } catch (_) {} this.timer = null; }
+    } catch (e) {
+      const loading = document.getElementById('loadingMessage');
+      if (loading) loading.style.display = 'none';
+      this.isLoading = false;
+      this.nextTryAt = Date.now() + 3000;
+      const extra = document.getElementById('downloadPanelExtraMessage');
+      if (extra) {
+        extra.textContent = '无法在线预览此 DOCX，请点击下方“Download”查看。';
+        extra.style.display = '';
+      }
     }
   }
 
@@ -230,6 +380,17 @@ export default class DownloadPreviewer {
       if (!base || base <= 0) base = 600;
       const toolbarH = this.toolbar ? Math.ceil(this.toolbar.getBoundingClientRect().height) : 0;
       let desired = base - toolbarH;
+      // If we can read content height (e.g., for docx HTML), prefer that
+      try {
+        const doc = this.iframe.contentDocument || this.iframe.contentWindow?.document;
+        if (doc) {
+          const contentH = Math.max(
+            doc.body?.scrollHeight || 0,
+            doc.documentElement?.scrollHeight || 0
+          );
+          if (contentH > 0) desired = Math.max(desired, Math.min(contentH + 20, 2000));
+        }
+      } catch (_) {}
       if (desired < 120) desired = 120;
       this.iframe.style.height = desired + 'px';
     } catch (_) {}
@@ -265,6 +426,27 @@ export default class DownloadPreviewer {
     }
     return null;
   }
+
+  async _downloadArrayBufferWithRetry(href, maxAttempts = 3) {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const res = await fetch(href, { method: 'GET', credentials: 'include' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.arrayBuffer();
+      } catch (e) {
+        if (attempt < maxAttempts) {
+          await sleep(600 * attempt);
+          continue;
+        } else {
+          return null;
+        }
+      }
+    }
+    return null;
+  }
+
+  // mammoth fallback removed
 
   remove() {
     if (this.timer) clearInterval(this.timer);
