@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Blackboard 增强 Pro | Blackboard Enhanced Pro
 // @namespace    npm/vite-plugin-monkey
-// @version      1.2.1
+// @version      1.2.2
 // @author       Miang
 // @description  Blackboard 增强插件，For SCUPIANS
 // @license      MIT

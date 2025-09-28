@@ -1,7 +1,7 @@
 # Blackboard 增强 Pro | Blackboard Enhanced Pro
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/Version-1.2.1-blue.svg)](https://github.com/YZKnight/Blackboard-Enhanced-Pro)
+[![Version](https://img.shields.io/badge/Version-1.2.2-blue.svg)](https://github.com/YZKnight/Blackboard-Enhanced-Pro)
 [![GreasyFork](https://img.shields.io/badge/GreasyFork-Install-brightgreen.svg)](https://greasyfork.org/zh-CN/scripts/550546-blackboard-%E5%A2%9E%E5%BC%BA-pro-blackboard-enhanced-pro)
 [![UserScript](https://img.shields.io/badge/UserScript-Tampermonkey%20%7C%20Violentmonkey-orange.svg)](https://www.tampermonkey.net/)
 [![GitHub Stars](https://img.shields.io/github/stars/YZKnight/Blackboard-Enhanced-Pro?style=social)](https://github.com/YZKnight/Blackboard-Enhanced-Pro)
@@ -99,6 +99,20 @@
 - 本脚本仅在用户浏览器本地运行，不收集个人敏感信息；请遵守所在学校与平台的使用政策与学术规范。
 
 ## 历史版本
+
+### 1.2
+新增功能
+
+**作业批改**
+1. Word文档批改支持
+2. 学生端查看PDF/Word文档支持
+
+优化功能
+
+**作业批改**
+1. 修复部分浏览器中 PDF 加载失败的问题
+2. 修复部分浏览器兼容性问题
+3. 提升脚本稳定性
 
 
 ### 1.0
