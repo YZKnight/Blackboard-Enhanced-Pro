@@ -6,6 +6,7 @@ import { Calendar } from "./components/Calendar";
 import { GradeAssignment } from "./components/GradeAssignment";
 import StudentSubmissionPreview from './components/assignment/StudentSubmissionPreview';
 import MyGrades from './components/MyGrades';
+import { fetchAllMyGrades } from './components/fetchMyGrades';
 
 
 import {
@@ -38,6 +39,7 @@ function App() {
 
   menuControl(env, setEnv)
   const [todoItems, setTodoItems] = useState(null);
+  const [myGradesItems, setMyGradesItems] = useState(null);
 
   useEffect(() => {
     // Only fetch calendar/attempts on the Portal tabAction page to avoid waste on other routes
@@ -168,14 +170,33 @@ function App() {
     };
   }, [todoItems, env.calendar.display, env.calendar.showSubmitted]);
 
-  // Mount My Grades module at the top of Column0 on portal page
+  // Prefetch My Grades data and mount module directly below DDL Poster once ready
   useEffect(() => {
     const isPortalTabAction = window.location.href.startsWith('https://pibb.scu.edu.cn/webapps/portal/execute/tabs/tabAction');
     if (!isPortalTabAction) return;
 
-    const host = document.getElementById('column0')
-      || document.querySelector('#column0')
-      || document.body;
+    let alive = true;
+    (async () => {
+      try {
+        const data = await fetchAllMyGrades();
+        if (alive) setMyGradesItems(data);
+      } catch (_) {}
+    })();
+
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    const isPortalTabAction = window.location.href.startsWith('https://pibb.scu.edu.cn/webapps/portal/execute/tabs/tabAction');
+    if (!isPortalTabAction || !myGradesItems) return;
+
+    const poster = document.getElementById('module:_bbep_calendar');
+    const host = (poster && poster.parentElement)
+      || document.getElementById('column2')
+      || document.querySelector('#column2')
+      || document.getElementById('column1')
+      || document.querySelector('#column1');
+    if (!host) return;
 
     let moduleEl = document.getElementById('module:_bbep_mygrades');
     if (!moduleEl) {
@@ -186,20 +207,29 @@ function App() {
         <h2 class="clearfix" style="cursor: default;">
           <span class="moduleTitle">My Grades</span>
         </h2>
-        <div class="collapsible" style="overflow: auto; display: block; max-height: none;" aria-expanded="true" id="BBEP_MyGrades_Module">
+        <div class="collapsible" style="overflow: auto; display: block; height: 320px;" aria-expanded="true" id="BBEP_MyGrades_Module">
           <div id="div_bbep_mygrades_root"></div>
         </div>
       `;
       moduleEl.innerHTML = html;
       try {
-        if (host && (host.firstElementChild || host.firstChild)) {
-          host.insertBefore(moduleEl, host.firstElementChild || host.firstChild);
-        } else if (host) {
+        if (poster && poster.parentElement === host) {
+          const next = poster.nextSibling;
+          if (next) host.insertBefore(moduleEl, next); else host.appendChild(moduleEl);
+        } else {
           host.appendChild(moduleEl);
         }
-      } catch (_) {
-        host.appendChild(moduleEl);
-      }
+      } catch (_) { host.appendChild(moduleEl); }
+    } else {
+      // Ensure correct placement under DDL Poster if already exists
+      try {
+        if (poster && poster.parentElement === host) {
+          const next = poster.nextSibling;
+          if (moduleEl.parentElement !== host || (next && next !== moduleEl)) {
+            if (next) host.insertBefore(moduleEl, next); else host.appendChild(moduleEl);
+          }
+        }
+      } catch (_) {}
     }
 
     const mountPoint = moduleEl.querySelector('#div_bbep_mygrades_root');
@@ -207,22 +237,25 @@ function App() {
     if (coll) {
       try {
         coll.style.display = 'block';
-        coll.style.maxHeight = 'none';
+        coll.style.height = '320px';
+        coll.style.maxHeight = '320px';
         coll.setAttribute('aria-expanded', 'true');
       } catch (_) {}
     }
     if (!mountPoint) return;
+    if (mountPoint.dataset.bbepMounted === '1') return;
     const root = ReactDOM.createRoot(mountPoint);
     root.render(
       <React.StrictMode>
-        <MyGrades />
+        <MyGrades items={myGradesItems} />
       </React.StrictMode>
     );
+    mountPoint.dataset.bbepMounted = '1';
 
     return () => {
       try { root.unmount(); } catch (_) {}
     };
-  }, []);
+  }, [myGradesItems]);
 
 
   return <>

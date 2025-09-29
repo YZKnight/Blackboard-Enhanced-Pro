@@ -1432,14 +1432,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         itemsPreview: [],
         notes: []
       };
-      if (!res.ok) {
-        debug.notes.push(`HTTP ${res.status}`);
-      }
       const doc = new DOMParser().parseFromString(html, "text/html");
       const wrapper = doc.querySelector("#grades_wrapper");
-      if (!wrapper) {
+      if (!wrapper)
         return { items: [], debug };
-      }
       debug.hasWrapper = true;
       const rows = Array.from(wrapper.querySelectorAll('div.sortable_item_row[role="row"], div.row[role="row"], div[role="row"]'));
       debug.rowCount = rows.length;
@@ -1500,7 +1496,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       return { items: [], debug: { courseId: course.id, courseName: course.name, url, error: "fetch failed" } };
     }
   }
-  async function fetchAllGrades() {
+  async function fetchAllMyGrades() {
     const courseDb = await courseInfoCatch();
     const entries = Object.entries(courseDb).map(([name, v]) => ({ id: v.id, name }));
     const out = [];
@@ -1510,13 +1506,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       const batch = entries.slice(i, i + batchSize);
       const batchResults = await Promise.all(batch.map((c) => fetchCourseMyGrades(c)));
       for (const r of batchResults) {
-        if (Array.isArray(r)) {
-          out.push(...r);
-        } else if (r && r.items) {
+        if (r && r.items)
           out.push(...r.items);
-          if (r.debug)
-            debugAll.courses.push(r.debug);
-        }
+        if (r && r.debug)
+          debugAll.courses.push(r.debug);
       }
     }
     out.sort((a, b) => {
@@ -1524,13 +1517,24 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       const lb = isFinite(b.lastActivityMs) ? b.lastActivityMs : isFinite(b.dueMs) ? b.dueMs : -Infinity;
       return lb - la;
     });
+    const hasRealGrade = (t) => {
+      if (!t)
+        return false;
+      const s = String(t).trim();
+      if (!s)
+        return false;
+      if (s === "-" || s.startsWith("-"))
+        return false;
+      return true;
+    };
+    const gradedOnly = out.filter((it) => hasRealGrade(it.gradeText));
     try {
       console.groupCollapsed("[BBEP MyGrades] Aggregated Grades JSON");
-      console.log(JSON.stringify({ summary: { time: debugAll.time, courseCount: debugAll.courseCount, itemCount: out.length }, detail: debugAll }, null, 2));
+      console.log(JSON.stringify({ summary: { time: debugAll.time, courseCount: debugAll.courseCount, itemCount: gradedOnly.length }, detail: debugAll }, null, 2));
       console.groupEnd();
     } catch (_) {
     }
-    return out;
+    return gradedOnly;
   }
   function formatDateTime(ms) {
     if (!isFinite(ms))
@@ -1542,8 +1546,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       return "";
     }
   }
-  function MyGrades() {
-    const [items, setItems] = React.useState(null);
+  function MyGrades({ items: presetItems }) {
+    const [items, setItems] = React.useState(presetItems || null);
     const [error, setError] = React.useState(null);
     const [ts, setTs] = React.useState(Date.now());
     React.useEffect(() => {
@@ -1555,10 +1559,14 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       }
     }, [items]);
     React.useEffect(() => {
+      if (presetItems && Array.isArray(presetItems)) {
+        setItems(presetItems);
+        return;
+      }
       let alive = true;
       (async () => {
         try {
-          const data = await fetchAllGrades();
+          const data = await fetchAllMyGrades();
           if (alive)
             setItems(data);
         } catch (e) {
@@ -1569,13 +1577,13 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       return () => {
         alive = false;
       };
-    }, [ts]);
+    }, [ts, presetItems]);
     const toolbar = /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 8px 0" }, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontSize: "12px", color: "#666" }, children: [
         "Updated: ",
         new Date(ts).toLocaleTimeString()
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "genericButton", onClick: () => {
+      !presetItems && /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "genericButton", onClick: () => {
         setItems(null);
         setTs(Date.now());
       }, style: { fontSize: "12px" }, children: "Refresh" })
@@ -1628,6 +1636,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       })
     );
     const [todoItems, setTodoItems] = React.useState(null);
+    const [myGradesItems, setMyGradesItems] = React.useState(null);
     React.useEffect(() => {
       const isPortalTabAction = window.location.href.startsWith("https://pibb.scu.edu.cn/webapps/portal/execute/tabs/tabAction");
       if (!isPortalTabAction)
@@ -1733,7 +1742,27 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       const isPortalTabAction = window.location.href.startsWith("https://pibb.scu.edu.cn/webapps/portal/execute/tabs/tabAction");
       if (!isPortalTabAction)
         return;
-      const host = document.getElementById("column0") || document.querySelector("#column0") || document.body;
+      let alive = true;
+      (async () => {
+        try {
+          const data = await fetchAllMyGrades();
+          if (alive)
+            setMyGradesItems(data);
+        } catch (_) {
+        }
+      })();
+      return () => {
+        alive = false;
+      };
+    }, []);
+    React.useEffect(() => {
+      const isPortalTabAction = window.location.href.startsWith("https://pibb.scu.edu.cn/webapps/portal/execute/tabs/tabAction");
+      if (!isPortalTabAction || !myGradesItems)
+        return;
+      const poster = document.getElementById("module:_bbep_calendar");
+      const host = poster && poster.parentElement || document.getElementById("column2") || document.querySelector("#column2") || document.getElementById("column1") || document.querySelector("#column1");
+      if (!host)
+        return;
       let moduleEl = document.getElementById("module:_bbep_mygrades");
       if (!moduleEl) {
         moduleEl = document.createElement("div");
@@ -1743,19 +1772,36 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         <h2 class="clearfix" style="cursor: default;">
           <span class="moduleTitle">My Grades</span>
         </h2>
-        <div class="collapsible" style="overflow: auto; display: block; max-height: none;" aria-expanded="true" id="BBEP_MyGrades_Module">
+        <div class="collapsible" style="overflow: auto; display: block; height: 320px;" aria-expanded="true" id="BBEP_MyGrades_Module">
           <div id="div_bbep_mygrades_root"></div>
         </div>
       `;
         moduleEl.innerHTML = html;
         try {
-          if (host && (host.firstElementChild || host.firstChild)) {
-            host.insertBefore(moduleEl, host.firstElementChild || host.firstChild);
-          } else if (host) {
+          if (poster && poster.parentElement === host) {
+            const next = poster.nextSibling;
+            if (next)
+              host.insertBefore(moduleEl, next);
+            else
+              host.appendChild(moduleEl);
+          } else {
             host.appendChild(moduleEl);
           }
         } catch (_) {
           host.appendChild(moduleEl);
+        }
+      } else {
+        try {
+          if (poster && poster.parentElement === host) {
+            const next = poster.nextSibling;
+            if (moduleEl.parentElement !== host || next && next !== moduleEl) {
+              if (next)
+                host.insertBefore(moduleEl, next);
+              else
+                host.appendChild(moduleEl);
+            }
+          }
+        } catch (_) {
         }
       }
       const mountPoint = moduleEl.querySelector("#div_bbep_mygrades_root");
@@ -1763,24 +1809,28 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       if (coll) {
         try {
           coll.style.display = "block";
-          coll.style.maxHeight = "none";
+          coll.style.height = "320px";
+          coll.style.maxHeight = "320px";
           coll.setAttribute("aria-expanded", "true");
         } catch (_) {
         }
       }
       if (!mountPoint)
         return;
+      if (mountPoint.dataset.bbepMounted === "1")
+        return;
       const root = client.createRoot(mountPoint);
       root.render(
-        /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(MyGrades, {}) })
+        /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(MyGrades, { items: myGradesItems }) })
       );
+      mountPoint.dataset.bbepMounted = "1";
       return () => {
         try {
           root.unmount();
         } catch (_) {
         }
       };
-    }, []);
+    }, [myGradesItems]);
     return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
       window.location.href.startsWith("https://pibb.scu.edu.cn/webapps/assignment/gradeAssignmentRedirector") && env.assignment.display ? /* @__PURE__ */ jsxRuntimeExports.jsx(GradeAssignment, { env, setEnv }) : null,
       window.location.href.startsWith("https://pibb.scu.edu.cn/webapps/assignment/uploadAssignment") && env.assignment.display ? /* @__PURE__ */ jsxRuntimeExports.jsx(StudentSubmissionPreview, {}) : null

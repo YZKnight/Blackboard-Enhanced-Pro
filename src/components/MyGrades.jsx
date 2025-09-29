@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { courseInfoCatch } from './fetchCourse';
+import { fetchAllMyGrades } from './fetchMyGrades';
 
 async function fetchCourseMyGrades(course) {
   const url = `/webapps/bb-mygrades-BBLEARN/myGrades?course_id=${encodeURIComponent(course.id)}&stream_name=mygrades&is_stream=false`;
@@ -129,8 +129,8 @@ function formatDateTime(ms) {
   } catch (_) { return ''; }
 }
 
-export default function MyGrades() {
-  const [items, setItems] = useState(null);
+export default function MyGrades({ items: presetItems }) {
+  const [items, setItems] = useState(presetItems || null);
   const [error, setError] = useState(null);
   const [ts, setTs] = useState(Date.now());
 
@@ -143,22 +143,28 @@ export default function MyGrades() {
   }, [items]);
 
   useEffect(() => {
+    if (presetItems && Array.isArray(presetItems)) {
+      setItems(presetItems);
+      return;
+    }
     let alive = true;
     (async () => {
       try {
-        const data = await fetchAllGrades();
+        const data = await fetchAllMyGrades();
         if (alive) setItems(data);
       } catch (e) {
         if (alive) setError('Failed to load grades');
       }
     })();
     return () => { alive = false; };
-  }, [ts]);
+  }, [ts, presetItems]);
 
   const toolbar = (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px 0' }}>
       <div style={{ fontSize: '12px', color: '#666' }}>Updated: {new Date(ts).toLocaleTimeString()}</div>
-      <button className="genericButton" onClick={() => { setItems(null); setTs(Date.now()); }} style={{ fontSize: '12px' }}>Refresh</button>
+      {!presetItems && (
+        <button className="genericButton" onClick={() => { setItems(null); setTs(Date.now()); }} style={{ fontSize: '12px' }}>Refresh</button>
+      )}
     </div>
   );
 
