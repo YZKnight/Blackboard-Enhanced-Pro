@@ -10,7 +10,7 @@ export default defineConfig({
       entry: 'src/main.jsx',
       userscript: {
         name: 'Blackboard 增强 Pro | Blackboard Enhanced Pro',
-        version: '1.3.0',
+        version: '1.3.1',
         namespace: 'npm/vite-plugin-monkey',
         match: ['https://pibb.scu.edu.cn/*'],
         license: 'MIT',

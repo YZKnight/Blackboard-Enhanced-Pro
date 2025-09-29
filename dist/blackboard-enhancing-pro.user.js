@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Blackboard 增强 Pro | Blackboard Enhanced Pro
 // @namespace    npm/vite-plugin-monkey
-// @version      1.3.0
+// @version      1.3.1
 // @author       Miang
 // @description  Blackboard 增强插件，For SCUPIANS
 // @license      MIT
@@ -11,6 +11,7 @@
 // @require      https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js
 // @require      https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js
 // @grant        GM_addStyle
+// @grant        GM_addValueChangeListener
 // @grant        GM_getValue
 // @grant        GM_setValue
 // ==/UserScript==
@@ -265,6 +266,7 @@
     client.createRoot = m.createRoot;
     client.hydrateRoot = m.hydrateRoot;
   }
+  var _GM_addValueChangeListener = /* @__PURE__ */ (() => typeof GM_addValueChangeListener != "undefined" ? GM_addValueChangeListener : void 0)();
   var _GM_getValue = /* @__PURE__ */ (() => typeof GM_getValue != "undefined" ? GM_getValue : void 0)();
   var _GM_setValue = /* @__PURE__ */ (() => typeof GM_setValue != "undefined" ? GM_setValue : void 0)();
   const formatDuration = (ms) => {
@@ -1547,10 +1549,11 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       return "";
     }
   }
-  function MyGrades({ items: presetItems }) {
+  function MyGrades({ items: presetItems, updatedAt, updatedFresh = false }) {
     const [items, setItems] = React.useState(presetItems || null);
     const [error, setError] = React.useState(null);
     const [ts, setTs] = React.useState(Date.now());
+    const [selfFresh, setSelfFresh] = React.useState(false);
     React.useEffect(() => {
       try {
         if (Array.isArray(items)) {
@@ -1568,8 +1571,11 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       (async () => {
         try {
           const data = await fetchAllMyGrades();
-          if (alive)
+          if (alive) {
             setItems(data);
+            setTs(Date.now());
+            setSelfFresh(true);
+          }
         } catch (e) {
           if (alive)
             setError("Failed to load grades");
@@ -1579,16 +1585,13 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         alive = false;
       };
     }, [ts, presetItems]);
-    const toolbar = /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 8px 0" }, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontSize: "12px", color: "#666" }, children: [
-        "Updated: ",
-        new Date(ts).toLocaleTimeString()
-      ] }),
-      !presetItems && /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "genericButton", onClick: () => {
-        setItems(null);
-        setTs(Date.now());
-      }, style: { fontSize: "12px" }, children: "Refresh" })
-    ] });
+    const shownUpdatedAt = updatedAt || ts;
+    const toolbar = /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 8px 0" }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontSize: "12px", color: "#666" }, children: [
+      "Updated: ",
+      new Date(shownUpdatedAt).toLocaleTimeString(),
+      " ",
+      updatedFresh || selfFresh ? "已更新" : ""
+    ] }) });
     if (error)
       return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
         toolbar,
@@ -1637,16 +1640,44 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       })
     );
     const [todoItems, setTodoItems] = React.useState(null);
+    const [calendarUpdatedAt, setCalendarUpdatedAt] = React.useState(null);
+    const [calendarIsFresh, setCalendarIsFresh] = React.useState(false);
     const [myGradesItems, setMyGradesItems] = React.useState(null);
+    const [myGradesUpdatedAt, setMyGradesUpdatedAt] = React.useState(null);
+    const [myGradesIsFresh, setMyGradesIsFresh] = React.useState(false);
     React.useEffect(() => {
       const isPortalTabAction = window.location.href.startsWith("https://pibb.scu.edu.cn/webapps/portal/execute/tabs/tabAction");
       if (!isPortalTabAction)
         return;
-      const fetchTodoItems = async () => {
-        const items = await calendarInfoCatch();
-        setTodoItems(items);
+      try {
+        const c = _GM_getValue("calendarCache", null);
+        if (c && Array.isArray(c.items)) {
+          setTodoItems(c.items);
+          setCalendarUpdatedAt(c.ts || Date.now());
+          setCalendarIsFresh(false);
+        }
+      } catch (_) {
+      }
+      let alive = true;
+      (async () => {
+        try {
+          const items = await calendarInfoCatch();
+          if (!alive)
+            return;
+          const ts = Date.now();
+          setTodoItems(items);
+          setCalendarUpdatedAt(ts);
+          setCalendarIsFresh(true);
+          try {
+            _GM_setValue("calendarCache", { items, ts });
+          } catch (_) {
+          }
+        } catch (_) {
+        }
+      })();
+      return () => {
+        alive = false;
       };
-      fetchTodoItems();
     }, []);
     React.useEffect(() => {
       _GM_setValue("env", env);
@@ -1679,6 +1710,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
           </span>
         </h2>
         <div class="collapsible" style="overflow: auto;" aria-expanded="true" id="BBEP_Calendar_Module">
+          <div id="bbep_calendar_updated" style="padding:6px 8px; font-size:12px; color:#666;"></div>
           <div id="div_bbep_calendar_root"></div>
         </div>
       `;
@@ -1718,6 +1750,15 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         };
       }
       const mountPoint = moduleEl.querySelector("#div_bbep_calendar_root");
+      const updatedEl = moduleEl.querySelector("#bbep_calendar_updated");
+      if (updatedEl) {
+        try {
+          const ts = calendarUpdatedAt || Date.now();
+          const suffix = calendarIsFresh ? " 已更新" : "";
+          updatedEl.textContent = `Updated: ${new Date(ts).toLocaleTimeString()}${suffix}`;
+        } catch (_) {
+        }
+      }
       const root = client.createRoot(mountPoint);
       const itemsFiltered = env.calendar.showSubmitted ? todoItems : todoItems.filter((it) => !(it.eventType === "Assignment" && it.submitted));
       const itemsForRender = (itemsFiltered || []).slice().sort((a, b) => {
@@ -1738,17 +1779,34 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         } catch (_) {
         }
       };
-    }, [todoItems, env.calendar.display, env.calendar.showSubmitted]);
+    }, [todoItems, env.calendar.display, env.calendar.showSubmitted, calendarUpdatedAt, calendarIsFresh]);
     React.useEffect(() => {
       const isPortalTabAction = window.location.href.startsWith("https://pibb.scu.edu.cn/webapps/portal/execute/tabs/tabAction");
       if (!isPortalTabAction)
         return;
+      try {
+        const c = _GM_getValue("myGradesCache", null);
+        if (c && Array.isArray(c.items)) {
+          setMyGradesItems(c.items);
+          setMyGradesUpdatedAt(c.ts || Date.now());
+          setMyGradesIsFresh(false);
+        }
+      } catch (_) {
+      }
       let alive = true;
       (async () => {
         try {
           const data = await fetchAllMyGrades();
-          if (alive)
-            setMyGradesItems(data);
+          if (!alive)
+            return;
+          const ts = Date.now();
+          setMyGradesItems(data);
+          setMyGradesUpdatedAt(ts);
+          setMyGradesIsFresh(true);
+          try {
+            _GM_setValue("myGradesCache", { items: data, ts });
+          } catch (_) {
+          }
         } catch (_) {
         }
       })();
@@ -1758,7 +1816,31 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     }, []);
     React.useEffect(() => {
       const isPortalTabAction = window.location.href.startsWith("https://pibb.scu.edu.cn/webapps/portal/execute/tabs/tabAction");
-      if (!isPortalTabAction || !myGradesItems)
+      if (!isPortalTabAction)
+        return;
+      let id = null;
+      try {
+        id = _GM_addValueChangeListener("myGradesCache", (_name, _old, nv) => {
+          if (!nv || !Array.isArray(nv.items))
+            return;
+          setMyGradesItems(nv.items);
+          setMyGradesUpdatedAt(nv.ts || Date.now());
+          setMyGradesIsFresh(true);
+        });
+      } catch (_) {
+      }
+      return () => {
+        if (id && typeof id === "number" && window.GM_removeValueChangeListener) {
+          try {
+            window.GM_removeValueChangeListener(id);
+          } catch (_) {
+          }
+        }
+      };
+    }, []);
+    React.useEffect(() => {
+      const isPortalTabAction = window.location.href.startsWith("https://pibb.scu.edu.cn/webapps/portal/execute/tabs/tabAction");
+      if (!isPortalTabAction)
         return;
       const poster = document.getElementById("module:_bbep_calendar");
       const host = poster && poster.parentElement || document.getElementById("column2") || document.querySelector("#column2") || document.getElementById("column1") || document.querySelector("#column1");
@@ -1819,20 +1901,15 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       }
       if (!mountPoint)
         return;
-      if (mountPoint.dataset.bbepMounted === "1")
-        return;
-      const root = client.createRoot(mountPoint);
+      let root = mountPoint.__bbepRoot;
+      if (!root) {
+        root = client.createRoot(mountPoint);
+        mountPoint.__bbepRoot = root;
+      }
       root.render(
-        /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(MyGrades, { items: myGradesItems }) })
+        /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(MyGrades, { items: myGradesItems || [], updatedAt: myGradesUpdatedAt || Date.now(), updatedFresh: !!myGradesIsFresh }) })
       );
-      mountPoint.dataset.bbepMounted = "1";
-      return () => {
-        try {
-          root.unmount();
-        } catch (_) {
-        }
-      };
-    }, [myGradesItems]);
+    }, [myGradesItems, myGradesUpdatedAt]);
     return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
       window.location.href.startsWith("https://pibb.scu.edu.cn/webapps/assignment/gradeAssignmentRedirector") && env.assignment.display ? /* @__PURE__ */ jsxRuntimeExports.jsx(GradeAssignment, { env, setEnv }) : null,
       window.location.href.startsWith("https://pibb.scu.edu.cn/webapps/assignment/uploadAssignment") && env.assignment.display ? /* @__PURE__ */ jsxRuntimeExports.jsx(StudentSubmissionPreview, {}) : null

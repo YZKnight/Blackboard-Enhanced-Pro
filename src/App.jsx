@@ -12,8 +12,9 @@ import { fetchAllMyGrades } from './components/fetchMyGrades';
 import {
   GM_setValue,
   GM_getValue,
-  GM_registerMenuCommand,
-  GM_unregisterMenuCommand
+  GM_addValueChangeListener,
+  GM_unregisterMenuCommand,
+  GM_registerMenuCommand
 } from '$'
 
 
@@ -39,17 +40,39 @@ function App() {
 
   menuControl(env, setEnv)
   const [todoItems, setTodoItems] = useState(null);
+  const [calendarUpdatedAt, setCalendarUpdatedAt] = useState(null);
+  const [calendarIsFresh, setCalendarIsFresh] = useState(false);
   const [myGradesItems, setMyGradesItems] = useState(null);
+  const [myGradesUpdatedAt, setMyGradesUpdatedAt] = useState(null);
+  const [myGradesIsFresh, setMyGradesIsFresh] = useState(false);
 
   useEffect(() => {
-    // Only fetch calendar/attempts on the Portal tabAction page to avoid waste on other routes
+    // Only fetch on the Portal page
     const isPortalTabAction = window.location.href.startsWith('https://pibb.scu.edu.cn/webapps/portal/execute/tabs/tabAction');
     if (!isPortalTabAction) return;
-    const fetchTodoItems = async () => {
-      const items = await calendarInfoCatch();
-      setTodoItems(items);
-    }
-    fetchTodoItems();
+    // Seed from cache immediately
+    try {
+      const c = GM_getValue('calendarCache', null);
+      if (c && Array.isArray(c.items)) {
+        setTodoItems(c.items);
+        setCalendarUpdatedAt(c.ts || Date.now());
+        setCalendarIsFresh(false);
+      }
+    } catch (_) {}
+    // Background refresh
+    let alive = true;
+    (async () => {
+      try {
+        const items = await calendarInfoCatch();
+        if (!alive) return;
+        const ts = Date.now();
+        setTodoItems(items);
+        setCalendarUpdatedAt(ts);
+        setCalendarIsFresh(true);
+        try { GM_setValue('calendarCache', { items, ts }); } catch (_) {}
+      } catch (_) {}
+    })();
+    return () => { alive = false; };
   }, [])
 
 
@@ -96,6 +119,7 @@ function App() {
           </span>
         </h2>
         <div class="collapsible" style="overflow: auto;" aria-expanded="true" id="BBEP_Calendar_Module">
+          <div id="bbep_calendar_updated" style="padding:6px 8px; font-size:12px; color:#666;"></div>
           <div id="div_bbep_calendar_root"></div>
         </div>
       `;
@@ -143,6 +167,14 @@ function App() {
     }
 
     const mountPoint = moduleEl.querySelector('#div_bbep_calendar_root');
+    const updatedEl = moduleEl.querySelector('#bbep_calendar_updated');
+    if (updatedEl) {
+      try {
+        const ts = calendarUpdatedAt || Date.now();
+        const suffix = calendarIsFresh ? ' 已更新' : '';
+        updatedEl.textContent = `Updated: ${new Date(ts).toLocaleTimeString()}${suffix}`;
+      } catch (_) {}
+    }
     const root = ReactDOM.createRoot(mountPoint);
     const itemsFiltered = env.calendar.showSubmitted
       ? todoItems
@@ -168,27 +200,60 @@ function App() {
       try { root.unmount(); } catch (_) {}
       // keep module chrome unless leaving portal page; do not remove here
     };
-  }, [todoItems, env.calendar.display, env.calendar.showSubmitted]);
+  }, [todoItems, env.calendar.display, env.calendar.showSubmitted, calendarUpdatedAt, calendarIsFresh]);
 
-  // Prefetch My Grades data and mount module directly below DDL Poster once ready
+  // Seed My Grades from cache and refresh in background
   useEffect(() => {
     const isPortalTabAction = window.location.href.startsWith('https://pibb.scu.edu.cn/webapps/portal/execute/tabs/tabAction');
     if (!isPortalTabAction) return;
-
+    // cache -> immediate
+    try {
+      const c = GM_getValue('myGradesCache', null);
+      if (c && Array.isArray(c.items)) {
+        setMyGradesItems(c.items);
+        setMyGradesUpdatedAt(c.ts || Date.now());
+        setMyGradesIsFresh(false);
+      }
+    } catch (_) {}
+    // background refresh
     let alive = true;
     (async () => {
       try {
         const data = await fetchAllMyGrades();
-        if (alive) setMyGradesItems(data);
+        if (!alive) return;
+        const ts = Date.now();
+        setMyGradesItems(data);
+        setMyGradesUpdatedAt(ts);
+        setMyGradesIsFresh(true);
+        try { GM_setValue('myGradesCache', { items: data, ts }); } catch (_) {}
       } catch (_) {}
     })();
-
     return () => { alive = false; };
+  }, []);
+
+  // Listen for cache updates (e.g., manual refresh inside MyGrades)
+  useEffect(() => {
+    const isPortalTabAction = window.location.href.startsWith('https://pibb.scu.edu.cn/webapps/portal/execute/tabs/tabAction');
+    if (!isPortalTabAction) return;
+    let id = null;
+    try {
+      id = GM_addValueChangeListener('myGradesCache', (_name, _old, nv) => {
+        if (!nv || !Array.isArray(nv.items)) return;
+        setMyGradesItems(nv.items);
+        setMyGradesUpdatedAt(nv.ts || Date.now());
+        setMyGradesIsFresh(true);
+      });
+    } catch (_) {}
+    return () => {
+      if (id && typeof id === 'number' && window.GM_removeValueChangeListener) {
+        try { window.GM_removeValueChangeListener(id); } catch (_) {}
+      }
+    };
   }, []);
 
   useEffect(() => {
     const isPortalTabAction = window.location.href.startsWith('https://pibb.scu.edu.cn/webapps/portal/execute/tabs/tabAction');
-    if (!isPortalTabAction || !myGradesItems) return;
+    if (!isPortalTabAction) return;
 
     const poster = document.getElementById('module:_bbep_calendar');
     const host = (poster && poster.parentElement)
@@ -244,19 +309,17 @@ function App() {
       } catch (_) {}
     }
     if (!mountPoint) return;
-    if (mountPoint.dataset.bbepMounted === '1') return;
-    const root = ReactDOM.createRoot(mountPoint);
+    let root = mountPoint.__bbepRoot;
+    if (!root) {
+      root = ReactDOM.createRoot(mountPoint);
+      mountPoint.__bbepRoot = root;
+    }
     root.render(
       <React.StrictMode>
-        <MyGrades items={myGradesItems} />
+        <MyGrades items={myGradesItems || []} updatedAt={myGradesUpdatedAt || Date.now()} updatedFresh={!!myGradesIsFresh} />
       </React.StrictMode>
     );
-    mountPoint.dataset.bbepMounted = '1';
-
-    return () => {
-      try { root.unmount(); } catch (_) {}
-    };
-  }, [myGradesItems]);
+  }, [myGradesItems, myGradesUpdatedAt]);
 
 
   return <>
