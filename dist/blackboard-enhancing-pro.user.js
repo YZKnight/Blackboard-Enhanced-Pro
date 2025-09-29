@@ -1603,18 +1603,18 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         toolbar,
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { padding: "8px" }, children: "No recent grades." })
       ] });
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { padding: "0 8px 12px" }, children: [
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { padding: "8px", width: "100%", boxSizing: "border-box", overflowX: "hidden" }, children: [
       toolbar,
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "grid", gap: "8px" }, children: items.map((it, idx) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", justifyContent: "space-between", gap: "12px", padding: "10px 12px", borderRadius: "6px", background: "#f6f7f9", border: "1px solid #e3e6ea" }, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "grid", gap: "8px", width: "100%", boxSizing: "border-box", overflowX: "hidden" }, children: items.map((it, idx) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "grid", gridTemplateColumns: "1fr auto", columnGap: "12px", padding: "10px 12px", borderRadius: "6px", background: "#f6f7f9", border: "1px solid #e3e6ea", width: "100%", boxSizing: "border-box", overflow: "hidden" }, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { minWidth: 0 }, children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontWeight: 600, fontSize: "13px", color: "#333", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontWeight: 600, fontSize: "12px", color: "#333", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: [
             it.courseName,
             it.itemType ? ` - ${it.itemType}` : ""
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: "13px", color: "#222", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: it.itemName || "(Unnamed)" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: "16px", fontWeight: 700, color: "#222", marginTop: "2px", overflowWrap: "anywhere" }, children: it.itemName || "(Unnamed)" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: "12px", color: "#666", marginTop: "2px" }, children: it.dueText || (isFinite(it.dueMs) ? `Due: ${formatDateTime(it.dueMs)}` : "") })
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { textAlign: "right", whiteSpace: "nowrap" }, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { textAlign: "right", whiteSpace: "nowrap", minWidth: "fit-content" }, children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontWeight: 700, fontSize: "18px", color: "#111" }, children: it.gradeText }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: "12px", color: "#666", marginTop: "2px" }, children: it.lastActivityText || (isFinite(it.lastActivityMs) ? formatDateTime(it.lastActivityMs) : "") })
         ] })
@@ -1811,6 +1811,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
           coll.style.display = "block";
           coll.style.height = "320px";
           coll.style.maxHeight = "320px";
+          coll.style.overflowX = "hidden";
           coll.setAttribute("aria-expanded", "true");
         } catch (_) {
         }

@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import { fetchAllMyGrades } from './fetchMyGrades';
+import { courseInfoCatch } from './fetchCourse';
 
 async function fetchCourseMyGrades(course) {
   const url = `/webapps/bb-mygrades-BBLEARN/myGrades?course_id=${encodeURIComponent(course.id)}&stream_name=mygrades&is_stream=false`;
@@ -17,12 +16,9 @@ async function fetchCourseMyGrades(course) {
       itemsPreview: [],
       notes: [],
     };
-    if (!res.ok) { debug.notes.push(`HTTP ${res.status}`); }
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const wrapper = doc.querySelector('#grades_wrapper');
-    if (!wrapper) {
-      return { items: [], debug };
-    }
+    if (!wrapper) return { items: [], debug };
     debug.hasWrapper = true;
     const rows = Array.from(wrapper.querySelectorAll('div.sortable_item_row[role="row"], div.row[role="row"], div[role="row"]'));
     debug.rowCount = rows.length;
@@ -44,7 +40,6 @@ async function fetchCourseMyGrades(course) {
         const dueText = cellGradable ? ((cellGradable.querySelector('.activityType')?.textContent || '').trim()) : '';
 
         const lastActivityText = cellActivity ? ((cellActivity.querySelector('.lastActivityDate')?.textContent || '').trim()) : '';
-        // Some themes place multiple spans; prefer the last .grade text node if multiple
         let gradeMain = '';
         if (cellGrade) {
           const gNodes = cellGrade.querySelectorAll('.grade');
@@ -56,7 +51,6 @@ async function fetchCourseMyGrades(course) {
         }
         const pointsText = cellGrade ? ((cellGrade.querySelector('.pointsPossible')?.textContent || '').trim()) : '';
 
-        // Keep all rows; some 'calculatedRow' may show '-' initially
         const item = {
           courseId: course.id,
           courseName: course.name,
@@ -88,10 +82,9 @@ async function fetchCourseMyGrades(course) {
   }
 }
 
-async function fetchAllGrades() {
+export async function fetchAllMyGrades() {
   const courseDb = await courseInfoCatch();
   const entries = Object.entries(courseDb).map(([name, v]) => ({ id: v.id, name }));
-  // Fetch in small parallel batches to avoid overloading
   const out = [];
   const debugAll = { time: Date.now(), courseCount: entries.length, courses: [] };
   const batchSize = 4;
@@ -99,105 +92,30 @@ async function fetchAllGrades() {
     const batch = entries.slice(i, i + batchSize);
     const batchResults = await Promise.all(batch.map(c => fetchCourseMyGrades(c)));
     for (const r of batchResults) {
-      if (Array.isArray(r)) {
-        out.push(...r);
-      } else if (r && r.items) {
-        out.push(...r.items);
-        if (r.debug) debugAll.courses.push(r.debug);
-      }
+      if (r && r.items) out.push(...r.items);
+      if (r && r.debug) debugAll.courses.push(r.debug);
     }
   }
-  // Sort by last activity desc; fallback to due date desc if last missing
+  // Sort desc by last activity (fallback to due date)
   out.sort((a, b) => {
     const la = isFinite(a.lastActivityMs) ? a.lastActivityMs : (isFinite(a.dueMs) ? a.dueMs : -Infinity);
     const lb = isFinite(b.lastActivityMs) ? b.lastActivityMs : (isFinite(b.dueMs) ? b.dueMs : -Infinity);
     return lb - la;
   });
+  // Keep only items with actual grade values
+  const hasRealGrade = (t) => {
+    if (!t) return false;
+    const s = String(t).trim();
+    if (!s) return false;
+    if (s === '-' || s.startsWith('-')) return false;
+    return true;
+  };
+  const gradedOnly = out.filter(it => hasRealGrade(it.gradeText));
   try {
     console.groupCollapsed('[BBEP MyGrades] Aggregated Grades JSON');
-    console.log(JSON.stringify({ summary: { time: debugAll.time, courseCount: debugAll.courseCount, itemCount: out.length }, detail: debugAll }, null, 2));
+    console.log(JSON.stringify({ summary: { time: debugAll.time, courseCount: debugAll.courseCount, itemCount: gradedOnly.length }, detail: debugAll }, null, 2));
     console.groupEnd();
   } catch (_) {}
-  return out;
+  return gradedOnly;
 }
 
-function formatDateTime(ms) {
-  if (!isFinite(ms)) return '';
-  try {
-    const d = new Date(ms);
-    return d.toLocaleString();
-  } catch (_) { return ''; }
-}
-
-export default function MyGrades({ items: presetItems }) {
-  const [items, setItems] = useState(presetItems || null);
-  const [error, setError] = useState(null);
-  const [ts, setTs] = useState(Date.now());
-
-  useEffect(() => {
-    try {
-      if (Array.isArray(items)) {
-        console.log('[BBEP MyGrades] render items length:', items.length);
-      }
-    } catch (_) {}
-  }, [items]);
-
-  useEffect(() => {
-    if (presetItems && Array.isArray(presetItems)) {
-      setItems(presetItems);
-      return;
-    }
-    let alive = true;
-    (async () => {
-      try {
-        const data = await fetchAllMyGrades();
-        if (alive) setItems(data);
-      } catch (e) {
-        if (alive) setError('Failed to load grades');
-      }
-    })();
-    return () => { alive = false; };
-  }, [ts, presetItems]);
-
-  const toolbar = (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px 0' }}>
-      <div style={{ fontSize: '12px', color: '#666' }}>Updated: {new Date(ts).toLocaleTimeString()}</div>
-      {!presetItems && (
-        <button className="genericButton" onClick={() => { setItems(null); setTs(Date.now()); }} style={{ fontSize: '12px' }}>Refresh</button>
-      )}
-    </div>
-  );
-
-  if (error) return <div>{toolbar}<div style={{ padding: '8px', color: '#b00' }}>{error}</div></div>;
-  if (!items) return <div>{toolbar}<div style={{ padding: '8px' }}>Loading grades…</div></div>;
-  if (!items.length) return <div>{toolbar}<div style={{ padding: '8px' }}>No recent grades.</div></div>;
-
-  return (
-    <div style={{ padding: '8px', width: '100%', boxSizing: 'border-box', overflowX: 'hidden' }}>
-      {toolbar}
-      <div style={{ display: 'grid', gap: '8px', width: '100%', boxSizing: 'border-box', overflowX: 'hidden' }}>
-        {items.map((it, idx) => (
-          <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr auto', columnGap: '12px', padding: '10px 12px', borderRadius: '6px', background: '#f6f7f9', border: '1px solid #e3e6ea', width: '100%', boxSizing: 'border-box', overflow: 'hidden' }}>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontWeight: 600, fontSize: '12px', color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {it.courseName}{it.itemType ? ` - ${it.itemType}` : ''}
-              </div>
-              <div style={{ fontSize: '16px', fontWeight: 700, color: '#222', marginTop: '2px', overflowWrap: 'anywhere' }}>
-                {it.itemName || '(Unnamed)'}
-              </div>
-              <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
-                {it.dueText || (isFinite(it.dueMs) ? `Due: ${formatDateTime(it.dueMs)}` : '')}
-              </div>
-            </div>
-            <div style={{ textAlign: 'right', whiteSpace: 'nowrap', minWidth: 'fit-content' }}>
-              <div style={{ fontWeight: 700, fontSize: '18px', color: '#111' }}>{it.gradeText}</div>
-              <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
-                {it.lastActivityText || (isFinite(it.lastActivityMs) ? formatDateTime(it.lastActivityMs) : '')}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}

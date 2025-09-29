@@ -239,6 +239,7 @@ function App() {
         coll.style.display = 'block';
         coll.style.height = '320px';
         coll.style.maxHeight = '320px';
+        coll.style.overflowX = 'hidden';
         coll.setAttribute('aria-expanded', 'true');
       } catch (_) {}
     }
