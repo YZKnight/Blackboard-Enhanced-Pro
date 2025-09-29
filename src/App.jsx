@@ -5,6 +5,7 @@ import ReactDOM from 'react-dom/client';
 import { Calendar } from "./components/Calendar";
 import { GradeAssignment } from "./components/GradeAssignment";
 import StudentSubmissionPreview from './components/assignment/StudentSubmissionPreview';
+import MyGrades from './components/MyGrades';
 
 
 import {
@@ -166,6 +167,62 @@ function App() {
       // keep module chrome unless leaving portal page; do not remove here
     };
   }, [todoItems, env.calendar.display, env.calendar.showSubmitted]);
+
+  // Mount My Grades module at the top of Column0 on portal page
+  useEffect(() => {
+    const isPortalTabAction = window.location.href.startsWith('https://pibb.scu.edu.cn/webapps/portal/execute/tabs/tabAction');
+    if (!isPortalTabAction) return;
+
+    const host = document.getElementById('column0')
+      || document.querySelector('#column0')
+      || document.body;
+
+    let moduleEl = document.getElementById('module:_bbep_mygrades');
+    if (!moduleEl) {
+      moduleEl = document.createElement('div');
+      moduleEl.className = 'portlet clearfix reorderableModule';
+      moduleEl.id = 'module:_bbep_mygrades';
+      const html = `
+        <h2 class="clearfix" style="cursor: default;">
+          <span class="moduleTitle">My Grades</span>
+        </h2>
+        <div class="collapsible" style="overflow: auto; display: block; max-height: none;" aria-expanded="true" id="BBEP_MyGrades_Module">
+          <div id="div_bbep_mygrades_root"></div>
+        </div>
+      `;
+      moduleEl.innerHTML = html;
+      try {
+        if (host && (host.firstElementChild || host.firstChild)) {
+          host.insertBefore(moduleEl, host.firstElementChild || host.firstChild);
+        } else if (host) {
+          host.appendChild(moduleEl);
+        }
+      } catch (_) {
+        host.appendChild(moduleEl);
+      }
+    }
+
+    const mountPoint = moduleEl.querySelector('#div_bbep_mygrades_root');
+    const coll = moduleEl.querySelector('#BBEP_MyGrades_Module');
+    if (coll) {
+      try {
+        coll.style.display = 'block';
+        coll.style.maxHeight = 'none';
+        coll.setAttribute('aria-expanded', 'true');
+      } catch (_) {}
+    }
+    if (!mountPoint) return;
+    const root = ReactDOM.createRoot(mountPoint);
+    root.render(
+      <React.StrictMode>
+        <MyGrades />
+      </React.StrictMode>
+    );
+
+    return () => {
+      try { root.unmount(); } catch (_) {}
+    };
+  }, []);
 
 
   return <>

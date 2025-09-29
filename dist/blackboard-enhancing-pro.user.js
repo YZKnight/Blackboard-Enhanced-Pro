@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Blackboard 增强 Pro | Blackboard Enhanced Pro
 // @namespace    npm/vite-plugin-monkey
-// @version      1.2.2
+// @version      1.3.0
 // @author       Miang
 // @description  Blackboard 增强插件，For SCUPIANS
 // @license      MIT
@@ -1415,6 +1415,204 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     }, []);
     return null;
   }
+  async function fetchCourseMyGrades(course) {
+    var _a, _b, _c, _d;
+    const url = `/webapps/bb-mygrades-BBLEARN/myGrades?course_id=${encodeURIComponent(course.id)}&stream_name=mygrades&is_stream=false`;
+    try {
+      const res = await fetch(url, { method: "GET", credentials: "include" });
+      const html = await res.text();
+      const debug = {
+        courseId: course.id,
+        courseName: course.name,
+        url,
+        httpStatus: res.status,
+        hasWrapper: false,
+        rowCount: 0,
+        itemsExtracted: 0,
+        itemsPreview: [],
+        notes: []
+      };
+      if (!res.ok) {
+        debug.notes.push(`HTTP ${res.status}`);
+      }
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      const wrapper = doc.querySelector("#grades_wrapper");
+      if (!wrapper) {
+        return { items: [], debug };
+      }
+      debug.hasWrapper = true;
+      const rows = Array.from(wrapper.querySelectorAll('div.sortable_item_row[role="row"], div.row[role="row"], div[role="row"]'));
+      debug.rowCount = rows.length;
+      const items = [];
+      for (const row of rows) {
+        try {
+          const lastMsStr = row.getAttribute("lastactivity");
+          const dueMsStr = row.getAttribute("duedate");
+          const lastMs = lastMsStr && lastMsStr !== "9223372036854775807" ? parseInt(lastMsStr, 10) : NaN;
+          const dueMs = dueMsStr && dueMsStr !== "9223372036854775807" ? parseInt(dueMsStr, 10) : NaN;
+          const cellGradable = row.querySelector(".cell.gradable");
+          const cellActivity = row.querySelector(".cell.activity");
+          const cellGrade = row.querySelector(".cell.grade");
+          const nameEl = cellGradable ? cellGradable.querySelector("a[id]") || cellGradable.querySelector("span[id]") : null;
+          const itemName = nameEl ? (nameEl.textContent || "").trim() : "";
+          const itemType = cellGradable ? (((_a = cellGradable.querySelector(".itemCat")) == null ? void 0 : _a.textContent) || "").trim() || (row.classList.contains("calculatedRow") ? "Calculated" : "") : "";
+          const dueText = cellGradable ? (((_b = cellGradable.querySelector(".activityType")) == null ? void 0 : _b.textContent) || "").trim() : "";
+          const lastActivityText = cellActivity ? (((_c = cellActivity.querySelector(".lastActivityDate")) == null ? void 0 : _c.textContent) || "").trim() : "";
+          let gradeMain = "";
+          if (cellGrade) {
+            const gNodes = cellGrade.querySelectorAll(".grade");
+            if (gNodes && gNodes.length) {
+              gradeMain = (gNodes[gNodes.length - 1].textContent || "").trim();
+            } else {
+              gradeMain = (cellGrade.textContent || "").trim();
+            }
+          }
+          const pointsText = cellGrade ? (((_d = cellGrade.querySelector(".pointsPossible")) == null ? void 0 : _d.textContent) || "").trim() : "";
+          const item = {
+            courseId: course.id,
+            courseName: course.name,
+            itemType,
+            itemName,
+            gradeText: gradeMain + (pointsText ? ` ${pointsText}` : ""),
+            lastActivityMs: isFinite(lastMs) ? lastMs : NaN,
+            lastActivityText,
+            dueMs: isFinite(dueMs) ? dueMs : NaN,
+            dueText
+          };
+          items.push(item);
+          debug.itemsPreview.push({
+            itemType,
+            itemName,
+            gradeText: item.gradeText,
+            lastActivityText,
+            lastActivityMs: item.lastActivityMs,
+            dueText,
+            dueMs: item.dueMs,
+            rowClass: row.className
+          });
+        } catch (e) {
+          debug.notes.push(`parse row failed: ${String(e && e.message || e)}`);
+        }
+      }
+      debug.itemsExtracted = items.length;
+      return { items, debug };
+    } catch (_) {
+      return { items: [], debug: { courseId: course.id, courseName: course.name, url, error: "fetch failed" } };
+    }
+  }
+  async function fetchAllGrades() {
+    const courseDb = await courseInfoCatch();
+    const entries = Object.entries(courseDb).map(([name, v]) => ({ id: v.id, name }));
+    const out = [];
+    const debugAll = { time: Date.now(), courseCount: entries.length, courses: [] };
+    const batchSize = 4;
+    for (let i = 0; i < entries.length; i += batchSize) {
+      const batch = entries.slice(i, i + batchSize);
+      const batchResults = await Promise.all(batch.map((c) => fetchCourseMyGrades(c)));
+      for (const r of batchResults) {
+        if (Array.isArray(r)) {
+          out.push(...r);
+        } else if (r && r.items) {
+          out.push(...r.items);
+          if (r.debug)
+            debugAll.courses.push(r.debug);
+        }
+      }
+    }
+    out.sort((a, b) => {
+      const la = isFinite(a.lastActivityMs) ? a.lastActivityMs : isFinite(a.dueMs) ? a.dueMs : -Infinity;
+      const lb = isFinite(b.lastActivityMs) ? b.lastActivityMs : isFinite(b.dueMs) ? b.dueMs : -Infinity;
+      return lb - la;
+    });
+    try {
+      console.groupCollapsed("[BBEP MyGrades] Aggregated Grades JSON");
+      console.log(JSON.stringify({ summary: { time: debugAll.time, courseCount: debugAll.courseCount, itemCount: out.length }, detail: debugAll }, null, 2));
+      console.groupEnd();
+    } catch (_) {
+    }
+    return out;
+  }
+  function formatDateTime(ms) {
+    if (!isFinite(ms))
+      return "";
+    try {
+      const d = new Date(ms);
+      return d.toLocaleString();
+    } catch (_) {
+      return "";
+    }
+  }
+  function MyGrades() {
+    const [items, setItems] = React.useState(null);
+    const [error, setError] = React.useState(null);
+    const [ts, setTs] = React.useState(Date.now());
+    React.useEffect(() => {
+      try {
+        if (Array.isArray(items)) {
+          console.log("[BBEP MyGrades] render items length:", items.length);
+        }
+      } catch (_) {
+      }
+    }, [items]);
+    React.useEffect(() => {
+      let alive = true;
+      (async () => {
+        try {
+          const data = await fetchAllGrades();
+          if (alive)
+            setItems(data);
+        } catch (e) {
+          if (alive)
+            setError("Failed to load grades");
+        }
+      })();
+      return () => {
+        alive = false;
+      };
+    }, [ts]);
+    const toolbar = /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 8px 0" }, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontSize: "12px", color: "#666" }, children: [
+        "Updated: ",
+        new Date(ts).toLocaleTimeString()
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "genericButton", onClick: () => {
+        setItems(null);
+        setTs(Date.now());
+      }, style: { fontSize: "12px" }, children: "Refresh" })
+    ] });
+    if (error)
+      return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+        toolbar,
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { padding: "8px", color: "#b00" }, children: error })
+      ] });
+    if (!items)
+      return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+        toolbar,
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { padding: "8px" }, children: "Loading grades…" })
+      ] });
+    if (!items.length)
+      return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+        toolbar,
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { padding: "8px" }, children: "No recent grades." })
+      ] });
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { padding: "0 8px 12px" }, children: [
+      toolbar,
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "grid", gap: "8px" }, children: items.map((it, idx) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", justifyContent: "space-between", gap: "12px", padding: "10px 12px", borderRadius: "6px", background: "#f6f7f9", border: "1px solid #e3e6ea" }, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { minWidth: 0 }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontWeight: 600, fontSize: "13px", color: "#333", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: [
+            it.courseName,
+            it.itemType ? ` - ${it.itemType}` : ""
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: "13px", color: "#222", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: it.itemName || "(Unnamed)" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: "12px", color: "#666", marginTop: "2px" }, children: it.dueText || (isFinite(it.dueMs) ? `Due: ${formatDateTime(it.dueMs)}` : "") })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { textAlign: "right", whiteSpace: "nowrap" }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontWeight: 700, fontSize: "18px", color: "#111" }, children: it.gradeText }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: "12px", color: "#666", marginTop: "2px" }, children: it.lastActivityText || (isFinite(it.lastActivityMs) ? formatDateTime(it.lastActivityMs) : "") })
+        ] })
+      ] }, idx)) })
+    ] });
+  }
   function App() {
     const [env, setEnv] = React.useState(
       _GM_getValue("env", {
@@ -1531,6 +1729,58 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         }
       };
     }, [todoItems, env.calendar.display, env.calendar.showSubmitted]);
+    React.useEffect(() => {
+      const isPortalTabAction = window.location.href.startsWith("https://pibb.scu.edu.cn/webapps/portal/execute/tabs/tabAction");
+      if (!isPortalTabAction)
+        return;
+      const host = document.getElementById("column0") || document.querySelector("#column0") || document.body;
+      let moduleEl = document.getElementById("module:_bbep_mygrades");
+      if (!moduleEl) {
+        moduleEl = document.createElement("div");
+        moduleEl.className = "portlet clearfix reorderableModule";
+        moduleEl.id = "module:_bbep_mygrades";
+        const html = `
+        <h2 class="clearfix" style="cursor: default;">
+          <span class="moduleTitle">My Grades</span>
+        </h2>
+        <div class="collapsible" style="overflow: auto; display: block; max-height: none;" aria-expanded="true" id="BBEP_MyGrades_Module">
+          <div id="div_bbep_mygrades_root"></div>
+        </div>
+      `;
+        moduleEl.innerHTML = html;
+        try {
+          if (host && (host.firstElementChild || host.firstChild)) {
+            host.insertBefore(moduleEl, host.firstElementChild || host.firstChild);
+          } else if (host) {
+            host.appendChild(moduleEl);
+          }
+        } catch (_) {
+          host.appendChild(moduleEl);
+        }
+      }
+      const mountPoint = moduleEl.querySelector("#div_bbep_mygrades_root");
+      const coll = moduleEl.querySelector("#BBEP_MyGrades_Module");
+      if (coll) {
+        try {
+          coll.style.display = "block";
+          coll.style.maxHeight = "none";
+          coll.setAttribute("aria-expanded", "true");
+        } catch (_) {
+        }
+      }
+      if (!mountPoint)
+        return;
+      const root = client.createRoot(mountPoint);
+      root.render(
+        /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(MyGrades, {}) })
+      );
+      return () => {
+        try {
+          root.unmount();
+        } catch (_) {
+        }
+      };
+    }, []);
     return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
       window.location.href.startsWith("https://pibb.scu.edu.cn/webapps/assignment/gradeAssignmentRedirector") && env.assignment.display ? /* @__PURE__ */ jsxRuntimeExports.jsx(GradeAssignment, { env, setEnv }) : null,
       window.location.href.startsWith("https://pibb.scu.edu.cn/webapps/assignment/uploadAssignment") && env.assignment.display ? /* @__PURE__ */ jsxRuntimeExports.jsx(StudentSubmissionPreview, {}) : null
