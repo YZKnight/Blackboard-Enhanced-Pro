@@ -185,9 +185,11 @@ export default function MyGrades({ items: presetItems }) {
               <div style={{ fontSize: '16px', fontWeight: 700, color: '#222', marginTop: '2px', overflowWrap: 'anywhere' }}>
                 {it.itemName || '(Unnamed)'}
               </div>
-              <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
-                {it.dueText || (isFinite(it.dueMs) ? `Due: ${formatDateTime(it.dueMs)}` : '')}
-              </div>
+              {it.lastActivityText ? (
+                <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
+                  {it.dueText || (isFinite(it.dueMs) ? `Due: ${formatDateTime(it.dueMs)}` : '')}
+                </div>
+              ) : null}
             </div>
             <div style={{ textAlign: 'right', whiteSpace: 'nowrap', minWidth: 'fit-content' }}>
               <div style={{ fontWeight: 700, fontSize: '18px', color: '#111' }}>{it.gradeText}</div>

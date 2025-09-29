@@ -111,11 +111,12 @@ export async function fetchAllMyGrades() {
     return true;
   };
   const gradedOnly = out.filter(it => hasRealGrade(it.gradeText));
+  // Exclude summary rows named exactly 'Total'
+  const filtered = gradedOnly.filter(it => (it.itemName || '').trim().toLowerCase() !== 'total');
   try {
     console.groupCollapsed('[BBEP MyGrades] Aggregated Grades JSON');
-    console.log(JSON.stringify({ summary: { time: debugAll.time, courseCount: debugAll.courseCount, itemCount: gradedOnly.length }, detail: debugAll }, null, 2));
+    console.log(JSON.stringify({ summary: { time: debugAll.time, courseCount: debugAll.courseCount, itemCount: filtered.length }, detail: debugAll }, null, 2));
     console.groupEnd();
   } catch (_) {}
-  return gradedOnly;
+  return filtered;
 }
-

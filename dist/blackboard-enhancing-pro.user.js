@@ -1528,13 +1528,14 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       return true;
     };
     const gradedOnly = out.filter((it) => hasRealGrade(it.gradeText));
+    const filtered = gradedOnly.filter((it) => (it.itemName || "").trim().toLowerCase() !== "total");
     try {
       console.groupCollapsed("[BBEP MyGrades] Aggregated Grades JSON");
-      console.log(JSON.stringify({ summary: { time: debugAll.time, courseCount: debugAll.courseCount, itemCount: gradedOnly.length }, detail: debugAll }, null, 2));
+      console.log(JSON.stringify({ summary: { time: debugAll.time, courseCount: debugAll.courseCount, itemCount: filtered.length }, detail: debugAll }, null, 2));
       console.groupEnd();
     } catch (_) {
     }
-    return gradedOnly;
+    return filtered;
   }
   function formatDateTime(ms) {
     if (!isFinite(ms))
@@ -1612,7 +1613,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             it.itemType ? ` - ${it.itemType}` : ""
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: "16px", fontWeight: 700, color: "#222", marginTop: "2px", overflowWrap: "anywhere" }, children: it.itemName || "(Unnamed)" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: "12px", color: "#666", marginTop: "2px" }, children: it.dueText || (isFinite(it.dueMs) ? `Due: ${formatDateTime(it.dueMs)}` : "") })
+          it.lastActivityText ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: "12px", color: "#666", marginTop: "2px" }, children: it.dueText || (isFinite(it.dueMs) ? `Due: ${formatDateTime(it.dueMs)}` : "") }) : null
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { textAlign: "right", whiteSpace: "nowrap", minWidth: "fit-content" }, children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontWeight: 700, fontSize: "18px", color: "#111" }, children: it.gradeText }),
