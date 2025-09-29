@@ -1613,7 +1613,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             it.itemType ? ` - ${it.itemType}` : ""
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: "16px", fontWeight: 700, color: "#222", marginTop: "2px", overflowWrap: "anywhere" }, children: it.itemName || "(Unnamed)" }),
-          it.lastActivityText ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: "12px", color: "#666", marginTop: "2px" }, children: it.dueText || (isFinite(it.dueMs) ? `Due: ${formatDateTime(it.dueMs)}` : "") }) : null
+          it.dueText && String(it.dueText).trim() ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: "12px", color: "#666", marginTop: "2px" }, children: it.dueText }) : null
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { textAlign: "right", whiteSpace: "nowrap", minWidth: "fit-content" }, children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontWeight: 700, fontSize: "18px", color: "#111" }, children: it.gradeText }),
